@@ -114,6 +114,13 @@
 .welcome-copy p { max-width: 330px; margin: 0; color: #6d7870; font-size: 11px; line-height: 1.65; }
 .welcome-cta { margin-top: 18px; min-height: 39px; padding: 0 14px; border-radius: 9px; font-size: 11px; }
 .welcome-art { position: absolute; top: 0; right: 0; width: 47%; height: 100%; overflow: hidden; background: linear-gradient(180deg,#e9f0e9,#dbe8dd); }
+.art-illustration { position: absolute; inset: 0; }
+.welcome-art-photo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.welcome-art-vignette { position: absolute; z-index: 2; inset: 0; background: linear-gradient(180deg,transparent 55%,#17241c55); pointer-events: none; }
+.campus-image-control { position: absolute; z-index: 4; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; min-height: 31px; padding: 0 10px; border: 1px solid #ffffffbd; border-radius: 8px; color: #31453a; background: #fffffff0; box-shadow: 0 2px 9px #18251d21; cursor: pointer; font: 700 9px var(--sans); transition: background .16s ease, transform .16s ease; }
+.campus-image-control:hover { background: #fff; transform: translateY(-1px); }
+.campus-image-control:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.campus-image-control:disabled { cursor: wait; opacity: .76; transform: none; }
 .art-sun { position: absolute; top: 24px; right: 66px; width: 78px; height: 78px; border-radius: 50%; background: #f8cd89; }
 .art-ground { position: absolute; right: -25px; bottom: -28px; width: 115%; height: 97px; border-radius: 50% 50% 0 0; }
 .ground-back { bottom: 10px; right: -75px; background: #b8ceb9; transform: rotate(-7deg); }

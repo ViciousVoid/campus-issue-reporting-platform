@@ -22,6 +22,7 @@ import { ModeratorDashboard } from '@/components/campus/moderator-dashboard'
 import { DEFAULT_HEAT_THRESHOLDS, getHeatLevel, getHeatThresholds, getIssueRecurrenceCount, scoreIssueHeat, type HeatThresholds } from '@/lib/campus-heat'
 import { CampusMap } from '@/components/campus/campus-map'
 import { DeveloperTools } from '@/components/campus/developer-tools'
+import { CampusHeroArt } from '@/components/campus/campus-hero-art'
 
 const supabase = createClient()
 const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,ai_summary,ai_summary_updated_at,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
@@ -84,11 +85,17 @@ export function CampusApp() {
   const [campusMenuOpen, setCampusMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [heroImageUploading, setHeroImageUploading] = useState(false)
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(false)
 
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
   const { data: categories = [] } = useSWR('categories', loadCategories)
+  const { data: campusHeroImagePath } = useSWR(campusId ? ['campus-hero-image', campusId] : null, async ([, id]) => {
+    const { data, error } = await supabase.from('campus_hero_images').select('storage_path').eq('campus_id', id).maybeSingle()
+    if (error) throw error
+    return data?.storage_path ?? null
+  })
   const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId ? ['issues', campusId] : null, ([, id]) => loadIssues(id))
   const { data: userIssues = [] } = useSWR(userId && campusId ? ['my-issues', userId, campusId] : null, async ([, uid, cid]) => {
     const { data, error } = await supabase.from('issues').select(ISSUE_SELECT).eq('reporter_id', uid).eq('campus_id', cid).order('created_at', { ascending: false })
@@ -168,6 +175,7 @@ export function CampusApp() {
   }, [campusId, campuses])
 
   const campus = campuses.find((item) => item.id === campusId) ?? campuses[0]
+  const campusHeroImageUrl = campusHeroImagePath ? supabase.storage.from('campus-assets').getPublicUrl(campusHeroImagePath).data.publicUrl : null
   const selectedIssue = issues.find((issue) => issue.id === selectedIssueId) ?? userIssues.find((issue) => issue.id === selectedIssueId) ?? null
   const orderedCategories = useMemo(() => categories.slice().sort((a, b) => {
     const priority = (name: string) => name.toLowerCase() === 'classroom' ? 0 : name.toLowerCase() === 'hostel' ? 1 : 2
@@ -235,6 +243,63 @@ export function CampusApp() {
     if (userId) return true
     setAuthOpen(true)
     return false
+  }
+
+  async function replaceCampusHeroImage(file: File) {
+    if (!await requireUser()) return
+
+    const allowedTypes: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    }
+    const extension = allowedTypes[file.type]
+    if (!extension) {
+      setNotice('Choose a JPG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setNotice('Choose an image smaller than 8 MB.')
+      return
+    }
+
+    setHeroImageUploading(true)
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        setAuthOpen(true)
+        return
+      }
+
+      const storagePath = `${campusId}/${crypto.randomUUID()}.${extension}`
+      const { error: uploadError } = await supabase.storage.from('campus-assets').upload(storagePath, file, {
+        contentType: file.type,
+        cacheControl: '31536000',
+        upsert: false,
+      })
+      if (uploadError) {
+        setNotice('The image could not be uploaded. Please try again.')
+        return
+      }
+
+      const { error: saveError } = await supabase.from('campus_hero_images').upsert({
+        campus_id: campusId,
+        storage_path: storagePath,
+        updated_by: user.id,
+      }, { onConflict: 'campus_id' })
+      if (saveError) {
+        setNotice('The image uploaded, but could not be shared. Please try again.')
+        return
+      }
+
+      await mutate(['campus-hero-image', campusId])
+      setNotice('Campus image updated for everyone.')
+    } catch {
+      setNotice('The image could not be updated. Please try again.')
+    } finally {
+      setHeroImageUploading(false)
+      window.setTimeout(() => setNotice(''), 3200)
+    }
   }
 
   async function handleCampusChange(nextCampusId: string) {
@@ -364,7 +429,7 @@ export function CampusApp() {
           <>
             <section className="welcome-panel">
               <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> YOUR CAMPUS, YOUR VOICE</span><h1>A better campus<br />starts <em>with us.</em></h1><p>Spot something that needs fixing? Share it with your campus community and help make change happen.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
-              <div className="welcome-art" aria-hidden="true"><div className="art-sun" /><div className="art-ground ground-back" /><div className="art-ground ground-front" /><div className="art-building building-one"><span /><span /><span /><span /></div><div className="art-building building-two"><span /><span /><span /></div><div className="art-tree tree-one" /><div className="art-tree tree-two" /><div className="art-path" /><span className="art-spark spark-one">✳</span><span className="art-spark spark-two">✳</span><div className="art-note"><span><Flame size={14} fill="currentColor" /></span><strong>Good change<br />is contagious.</strong></div></div>
+              <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(userId)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
             </section>
 
             <section ref={mapPanelRef} id="campus-map-panel" className="campus-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">CAMPUS MAP</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Use +/− or scroll over the map to zoom · drag to explore</span></div><CampusMap issues={feedIssues} center={mapCenter} focusedIssueId={mapFocusIssueId} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Map pins are approximate; open a report to review its location.</p></section>
