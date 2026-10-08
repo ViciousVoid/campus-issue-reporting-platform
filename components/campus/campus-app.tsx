@@ -257,7 +257,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   function toggleChatExpanded() {
     if (!chatExpanded) {
       const panelWidth = document.querySelector('.right-column')?.getBoundingClientRect().width
-      chatRestoreWidthRef.current = panelWidth ?? (window.matchMedia('(min-width: 1400px)').matches ? 300 : 278)
+      chatRestoreWidthRef.current = panelWidth ?? (window.matchMedia('(min-width: 1400px)').matches ? 375 : 348)
     }
     setChatExpanded((expanded) => !expanded)
   }
@@ -267,7 +267,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     if (!panel) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    const defaultWidth = window.matchMedia('(min-width: 1400px)').matches ? 300 : 278
+    const defaultWidth = window.matchMedia('(min-width: 1400px)').matches ? 375 : 348
     const restoreWidth = chatExpanded
       ? chatRestoreWidthRef.current ?? defaultWidth
       : panel.getBoundingClientRect().width
