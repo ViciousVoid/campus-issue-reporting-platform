@@ -131,9 +131,8 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [chatExpanded, setChatExpanded] = useState(false)
-  const [chatWidth, setChatWidth] = useState<number | null>(null)
-  const [chatWidthMax, setChatWidthMax] = useState<number | null>(null)
-  const chatResizeStartRef = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const chatRestoreWidthRef = useRef<number | null>(null)
+  const chatResizeStartRef = useRef<{ pointerId: number; startX: number; startedExpanded: boolean; restoreWidth: number } | null>(null)
   const [mapFocusIssueId, setMapFocusIssueId] = useState<string | null>(null)
   const [mapScrollIssueId, setMapScrollIssueId] = useState<string | null>(null)
   const mapPanelRef = useRef<HTMLElement | null>(null)
@@ -248,7 +247,6 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const campus = campuses.find((item) => item.id === campusId)
   const campusAccessDenied = Boolean(campusId && ((userId && !canLoadCampusData) || (!campus?.is_public && !profile?.campus_id)))
   const campusStyle = {
-    ...(chatWidth ? { '--chat-panel-width': `${chatWidth}px` } : {}),
     '--accent': campus?.brand_color ?? '#ed6747',
     '--accent-dark': campus?.brand_dark_color ?? '#d95739',
     '--primary': campus?.brand_color ?? '#ee6848',
@@ -256,10 +254,12 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     '--accent-gradient': `linear-gradient(115deg, ${campus?.brand_color ?? '#ee6848'} 0%, ${campus?.brand_dark_color ?? '#d95739'} 100%)`,
   } as CSSProperties
 
-  function getMaxChatWidth() {
-    const appWidth = document.querySelector('.campus-app')?.clientWidth ?? window.innerWidth
-    const sidebarWidth = document.querySelector('.campus-sidebar')?.getBoundingClientRect().width ?? 252
-    return Math.max(278, Math.min(900, appWidth - sidebarWidth - 420))
+  function toggleChatExpanded() {
+    if (!chatExpanded) {
+      const panelWidth = document.querySelector('.right-column')?.getBoundingClientRect().width
+      chatRestoreWidthRef.current = panelWidth ?? (window.matchMedia('(min-width: 1400px)').matches ? 300 : 278)
+    }
+    setChatExpanded((expanded) => !expanded)
   }
 
   function startChatResize(event: ReactPointerEvent<HTMLDivElement>) {
@@ -267,19 +267,28 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     if (!panel) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    setChatWidthMax(getMaxChatWidth())
+    const defaultWidth = window.matchMedia('(min-width: 1400px)').matches ? 300 : 278
+    const restoreWidth = chatExpanded
+      ? chatRestoreWidthRef.current ?? defaultWidth
+      : panel.getBoundingClientRect().width
     chatResizeStartRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
-      startWidth: panel.getBoundingClientRect().width,
+      startedExpanded: chatExpanded,
+      restoreWidth,
     }
   }
 
   function moveChatResize(event: ReactPointerEvent<HTMLDivElement>) {
     const start = chatResizeStartRef.current
     if (!start || start.pointerId !== event.pointerId) return
-    const nextWidth = start.startWidth + start.startX - event.clientX
-    setChatWidth(Math.min(getMaxChatWidth(), Math.max(278, nextWidth)))
+    const slide = start.startX - event.clientX
+    if (!start.startedExpanded && slide > 18) {
+      chatRestoreWidthRef.current = start.restoreWidth
+      setChatExpanded(true)
+    } else if (start.startedExpanded && slide < -18) {
+      setChatExpanded(false)
+    }
   }
 
   function stopChatResize() {
@@ -287,21 +296,13 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   }
 
   function handleChatResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    const currentWidth = chatWidth ?? event.currentTarget.parentElement?.getBoundingClientRect().width ?? 278
-    const nextWidth = event.key === 'ArrowLeft'
-      ? currentWidth + 24
-      : event.key === 'ArrowRight'
-        ? currentWidth - 24
-        : event.key === 'Home'
-          ? 278
-          : event.key === 'End'
-            ? getMaxChatWidth()
-            : null
-    if (nextWidth === null) return
-    event.preventDefault()
-    const maxWidth = getMaxChatWidth()
-    setChatWidthMax(maxWidth)
-    setChatWidth(Math.min(maxWidth, Math.max(278, nextWidth)))
+    if (event.key === 'ArrowLeft' || event.key === 'Home') {
+      event.preventDefault()
+      if (!chatExpanded) toggleChatExpanded()
+    } else if (event.key === 'ArrowRight' || event.key === 'End') {
+      event.preventDefault()
+      if (chatExpanded) setChatExpanded(false)
+    }
   }
 
   const campusHeroImageUrl = campusHeroImagePath
@@ -618,12 +619,12 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
         <div
           className="campus-chat-resize-handle"
           role="separator"
-          aria-label="Resize campus chat width"
+          aria-label="Expand or restore campus chat"
           aria-orientation="vertical"
-          aria-valuemin={278}
-          aria-valuemax={chatWidthMax ?? undefined}
-          aria-valuenow={chatWidth ?? undefined}
-          aria-valuetext={chatWidth ? `${Math.round(chatWidth)} pixels wide` : 'Default width'}
+          aria-valuemin={0}
+          aria-valuemax={1}
+          aria-valuenow={chatExpanded ? 1 : 0}
+          aria-valuetext={chatExpanded ? 'Full screen' : 'Standard width'}
           tabIndex={0}
           onPointerDown={startChatResize}
           onPointerMove={moveChatResize}
@@ -632,7 +633,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
           onKeyDown={handleChatResizeKeyDown}
         />
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
-        {view !== 'chat' && !campusAccessDenied && <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />}
+        {view !== 'chat' && !campusAccessDenied && <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} onToggleExpanded={toggleChatExpanded} onRequireAuth={() => setAuthOpen(true)} />}
       </aside>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">{mobileNavItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'activity' && !userId ? setAuthOpen(true) : setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{mobileNavItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'chat' ? setView(id) : userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>

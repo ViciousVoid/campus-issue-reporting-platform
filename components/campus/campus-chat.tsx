@@ -5,6 +5,7 @@ import useSWR, { mutate } from 'swr'
 import { Building2, ImagePlus, LoaderCircle, LockKeyhole, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { relativeTime } from '@/components/campus/issue-card'
+import { PhotoLightbox } from '@/components/campus/photo-lightbox'
 import { Bubble, BubbleContent } from '@/components/ui/bubble'
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageGroup, MessageHeader } from '@/components/ui/message'
 import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from '@/components/ui/message-scroller'
@@ -42,6 +43,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [viewImageUrl, setViewImageUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl) }, [imagePreviewUrl])
   const messagesKey = useMemo(() => userId && campusId ? ['campus-chat', campusId] as const : null, [campusId, userId])
@@ -203,7 +205,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
                                     <Bubble align={isOwnMessage ? 'end' : 'start'} variant={isOwnMessage ? 'tinted' : 'muted'} className="campus-chat-bubble">
                                       <BubbleContent className="campus-chat-bubble-content">
                                         {message.body && <span>{message.body}</span>}
-                                        {message.image_url && <a className="campus-chat-image-link" href={message.image_url} target="_blank" rel="noreferrer"><img className="campus-chat-image" src={message.image_url} alt="Image attached to a campus message" /></a>}
+                                        {message.image_url && <button className="campus-chat-image-link" type="button" aria-label="View image attached to campus message" onClick={() => setViewImageUrl(message.image_url)}><img className="campus-chat-image" src={message.image_url} alt="Image attached to a campus message" /></button>}
                                       </BubbleContent>
                                     </Bubble>
                                     <MessageFooter className="campus-chat-time"><time dateTime={message.created_at}>{relativeTime(message.created_at)}</time></MessageFooter>
@@ -248,8 +250,10 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
           </form>
         </>
       )}
-    </section>
+      {viewImageUrl && <PhotoLightbox photos={[{ src: viewImageUrl, alt: 'Image attached to a campus message' }]} onClose={() => setViewImageUrl(null)} />}
+      </section>
   )
 }
+
 
 export default CampusChat
