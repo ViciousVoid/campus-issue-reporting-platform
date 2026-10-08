@@ -56,7 +56,7 @@
   ::selection { background: #f8d2c5; color: var(--ink); }
 }
 
-.campus-app { --page: #f6f7f4; min-height: 100vh; display: grid; grid-template-columns: 252px minmax(420px, 1fr) 278px; max-width: 1600px; margin: 0 auto; background: var(--page); color: var(--ink); }
+.campus-app { --page: #f6f7f4; width: 100%; min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: 252px minmax(420px, 1fr) 348px; background: var(--page); color: var(--ink); }
 .campus-app.campus-locked { grid-template-columns: 252px minmax(420px, 1fr); }
 .campus-app.campus-locked .right-column { display: none; }
 .campus-sidebar { position: sticky; top: 0; height: 100vh; padding: 28px 20px 20px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: #fbfcfa; z-index: 10; }
@@ -109,7 +109,7 @@
 .avatar-tiny { width: 26px; height: 26px; font-size: 10px; }
 .avatar-large { width: 58px; height: 58px; font-size: 22px; }
 
-.main-column { min-width: 0; max-width: 840px; width: 100%; margin: 0 auto; padding: 29px 30px 92px; }
+.main-column { min-width: 0; width: 100%; margin: 0; padding: 29px 30px 92px; }
 .mobile-header { display: none; }
 .welcome-panel { min-height: 255px; overflow: hidden; position: relative; display: flex; align-items: center; padding: 31px 32px; border: 1px solid #edeee8; border-radius: 17px; background: #f0f3ed; }
 .welcome-copy { position: relative; z-index: 2; max-width: 390px; }
@@ -315,7 +315,7 @@
 .toast-message { position: fixed; z-index: 130; right: 25px; bottom: 24px; max-width: min(90vw,380px); padding: 12px 15px; border: 1px solid #dce7db; border-radius: 10px; color: #48664e; background: #f2f8f1; box-shadow: 0 8px 26px #17241b1a; font-size: 10px; font-weight: 600; animation: dialog-in .18s ease-out; }
 .mobile-nav { display: none; }
 
-@media (min-width: 1400px) { .campus-app { grid-template-columns: 270px minmax(520px,1fr) 300px; }.main-column { padding-right: 40px; padding-left: 40px; }.issue-photo-wrap { height: 205px; } }
+@media (min-width: 1400px) { .campus-app { grid-template-columns: 270px minmax(520px,1fr) 375px; }.main-column { padding-right: 40px; padding-left: 40px; }.issue-photo-wrap { height: 205px; } }
 @media (max-width: 1120px) { .campus-app { grid-template-columns: 225px minmax(420px,1fr); }.campus-sidebar { padding-right: 16px; padding-left: 16px; }.right-column { display: none; }.main-column { max-width: 780px; padding-right: 28px; padding-left: 28px; } }
 @media (max-width: 1120px) {
   .campus-app.chat-expanded,.campus-app.campus-locked { grid-template-columns: 225px minmax(420px,1fr); }
