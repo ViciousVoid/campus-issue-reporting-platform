@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import useSWR from 'swr'
-import { Camera, ImagePlus, LoaderCircle } from 'lucide-react'
+import { Camera, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-react'
 import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { statusStyles } from '@/components/campus/issue-card'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +26,8 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
   const [photoSource, setPhotoSource] = useState<'post' | 'community'>('post')
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [confirmingPhotoRemoval, setConfirmingPhotoRemoval] = useState(false)
+  const [removingPhoto, setRemovingPhoto] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const photos = useMemo(
@@ -54,7 +56,64 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
     ? photoUrls[selectedPhoto.storage_path] ?? `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
     : `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
   const canAddPhotos = issue.moderation_status === 'approved' || Boolean(userId && issue.reporter_id === userId)
+  const canRemoveSelectedPhoto = Boolean(userId && selectedPhoto?.uploaded_by === userId)
   const remainingSlots = Math.max(0, MAX_PHOTOS - photos.length)
+
+  async function removeSelectedPhoto() {
+    if (!userId) {
+      onRequireAuth()
+      return
+    }
+    if (!selectedPhoto || selectedPhoto.uploaded_by !== userId || removingPhoto) return
+
+    const photoToRemove = selectedPhoto
+    setRemovingPhoto(true)
+    setError('')
+    setNotice('')
+
+    try {
+      const { data: removedPhoto, error: mediaError } = await supabase
+        .from('issue_media')
+        .delete()
+        .eq('issue_id', issue.id)
+        .eq('storage_path', photoToRemove.storage_path)
+        .eq('uploaded_by', userId)
+        .select('issue_id,storage_path,display_order,uploaded_by')
+        .maybeSingle()
+
+      if (mediaError) throw mediaError
+      if (!removedPhoto) throw new Error('This photo is no longer attached to the post.')
+
+      const { error: storageError } = await supabase.storage.from('issue-photos').remove([photoToRemove.storage_path])
+      if (storageError) {
+        const { error: restoreError } = await supabase.from('issue_media').insert({
+          issue_id: removedPhoto.issue_id,
+          storage_path: removedPhoto.storage_path,
+          display_order: removedPhoto.display_order,
+          uploaded_by: userId,
+        })
+
+        if (restoreError) {
+          setSelectedPath('')
+          setConfirmingPhotoRemoval(false)
+          setNotice('Photo removed from the post, but its stored file could not be cleaned up.')
+          await onPhotosChanged()
+          return
+        }
+
+        throw new Error('The photo is still attached because its file could not be deleted. Please try again.')
+      }
+
+      setSelectedPath('')
+      setConfirmingPhotoRemoval(false)
+      setNotice('Photo removed from the post.')
+      await onPhotosChanged()
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'The photo could not be removed. Please try again.')
+    } finally {
+      setRemovingPhoto(false)
+    }
+  }
 
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = event.currentTarget.files ? Array.from(event.currentTarget.files) : []
@@ -154,23 +213,43 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
       )}
       <div className="community-photo-row">
         <span><Camera size={14} aria-hidden="true" />{photos.length ? `${photos.length} of ${MAX_PHOTOS} photos` : 'No photos added yet'}</span>
-        {canAddPhotos && remainingSlots > 0 && (
-          <>
-            <button type="button" className="button-secondary small" onClick={() => userId ? inputRef.current?.click() : onRequireAuth()} disabled={uploading}>
-              {uploading ? <LoaderCircle size={14} className="spin" /> : <ImagePlus size={14} />}
-              {uploading ? 'Adding photos…' : userId ? 'Add photos' : 'Sign in to add photos'}
-            </button>
-            <input
-              ref={inputRef}
-              className="sr-only"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
-              multiple
-              onChange={(event) => void addPhotos(event)}
-            />
-          </>
-        )}
-        {!canAddPhotos && <span className="photo-contribution-note">Photos open after moderator approval.</span>}
+        <div className="community-photo-actions">
+          {canRemoveSelectedPhoto && (
+            confirmingPhotoRemoval ? (
+              <div className="photo-remove-confirmation" role="group" aria-label="Confirm photo removal">
+                <span>Remove this photo from the post?</span>
+                <button type="button" className="button-secondary small" onClick={() => void removeSelectedPhoto()} disabled={removingPhoto}>
+                  {removingPhoto ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />}
+                  {removingPhoto ? 'Removing…' : 'Remove'}
+                </button>
+                <button type="button" className="button-secondary small" onClick={() => setConfirmingPhotoRemoval(false)} disabled={removingPhoto} aria-label="Cancel photo removal">
+                  <X size={14} /> Cancel
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="button-secondary small photo-remove-trigger" onClick={() => { setError(''); setConfirmingPhotoRemoval(true) }} disabled={uploading || removingPhoto}>
+                <Trash2 size={14} /> Remove photo
+              </button>
+            )
+          )}
+          {canAddPhotos && remainingSlots > 0 && (
+            <>
+              <button type="button" className="button-secondary small" onClick={() => userId ? inputRef.current?.click() : onRequireAuth()} disabled={uploading || removingPhoto}>
+                {uploading ? <LoaderCircle size={14} className="spin" /> : <ImagePlus size={14} />}
+                {uploading ? 'Adding photos…' : userId ? 'Add photos' : 'Sign in to add photos'}
+              </button>
+              <input
+                ref={inputRef}
+                className="sr-only"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic"
+                multiple
+                onChange={(event) => void addPhotos(event)}
+              />
+            </>
+          )}
+          {!canAddPhotos && <span className="photo-contribution-note">Photos open after moderator approval.</span>}
+        </div>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       {notice && <p className="photo-upload-notice" role="status">{notice}</p>}

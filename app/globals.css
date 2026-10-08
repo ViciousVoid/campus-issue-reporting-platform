@@ -497,10 +497,15 @@
 .photo-thumbnail { width: 62px; height: 52px; flex: 0 0 auto; overflow: hidden; padding: 0; border: 2px solid transparent; border-radius: 8px; background: var(--soft); cursor: pointer; }
 .photo-thumbnail.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
 .photo-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.community-photo-row { min-height: 38px; padding: 8px 20px 10px; display: flex; align-items: center; justify-content: space-between; gap: 9px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 9px; }
+.community-photo-row { min-height: 38px; padding: 8px 20px 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 9px; }
 .community-photo-row > span:first-child { display: inline-flex; align-items: center; gap: 5px; }
 .community-photo-row > span:first-child svg { color: var(--accent); }
+.community-photo-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .community-photo-row .button-secondary { min-height: 30px; font-size: 9px; }
+.community-photo-row .photo-remove-trigger { min-height: 40px; color: var(--accent-dark); }
+.photo-remove-confirmation { display: flex; flex: 1 1 100%; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+.photo-remove-confirmation > span { flex: 1 1 auto; color: var(--subtle-ink); }
+.photo-remove-confirmation .button-secondary { min-height: 40px; }
 .community-photo-row .photo-contribution-note { margin-left: auto; font-size: 8px; }
 .photo-upload-notice { margin: 7px 20px 0; color: var(--sage); font-size: 9px; }
 .detail-map-button { min-height: 31px; padding: 0 9px; margin-top: 9px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #f0d4ca; border-radius: 8px; color: var(--accent-dark); background: #fff9f6; cursor: pointer; font-size: 9px; font-weight: 700; }
