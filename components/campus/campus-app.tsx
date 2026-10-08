@@ -5,7 +5,7 @@ import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
   CircleHelp, Clock3, Compass, Flame, Heart, ImagePlus, LoaderCircle, LogIn, MapPin,
-  MessageCircle, Plus, Search, Send, ShieldCheck, Sparkles, ThumbsUp, Users, X,
+  MessageCircle, Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, X,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -74,6 +74,7 @@ export function CampusApp() {
   const [campusMenuOpen, setCampusMenuOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
   const { data: categories = [] } = useSWR('categories', loadCategories)
@@ -98,6 +99,11 @@ export function CampusApp() {
     if (error) throw error
     return data ?? []
   })
+
+  useEffect(() => {
+    const savedTheme = document.cookie.split('; ').find((cookie) => cookie.startsWith('campusheat-theme='))?.split('=')[1]
+    if (savedTheme === 'dark') setIsDarkMode(true)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -126,6 +132,10 @@ export function CampusApp() {
 
   const campus = campuses.find((item) => item.id === campusId) ?? campuses[0]
   const selectedIssue = issues.find((issue) => issue.id === selectedIssueId) ?? userIssues.find((issue) => issue.id === selectedIssueId) ?? null
+  const orderedCategories = useMemo(() => categories.slice().sort((a, b) => {
+    const priority = (name: string) => name.toLowerCase() === 'classroom' ? 0 : name.toLowerCase() === 'hostel' ? 1 : 2
+    return priority(a.name) - priority(b.name) || a.name.localeCompare(b.name)
+  }), [categories])
   const filteredIssues = useMemo(() => {
     const base = view === 'profile' ? userIssues : issues
     const normalized = query.trim().toLowerCase()
@@ -141,6 +151,12 @@ export function CampusApp() {
     await mutate(['issues', campusId])
     if (userId) await mutate(['my-issues', userId, campusId])
   }, [campusId, userId])
+
+  function toggleTheme() {
+    const nextIsDarkMode = !isDarkMode
+    setIsDarkMode(nextIsDarkMode)
+    document.cookie = `campusheat-theme=${nextIsDarkMode ? 'dark' : 'light'}; Path=/; Max-Age=31536000; SameSite=Lax`
+  }
 
   async function requireUser() {
     if (userId) return true
@@ -240,7 +256,7 @@ export function CampusApp() {
   const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : 'Your profile'
 
   return (
-    <div className="campus-app">
+    <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}`}>
       <aside className="campus-sidebar" aria-label="Main navigation">
         <a className="brand-lockup" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}>
           <span className="brand-symbol"><Flame size={21} fill="currentColor" /></span>
@@ -259,6 +275,7 @@ export function CampusApp() {
         <nav className="side-links" aria-label="Main">
           {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={19} /><span>{label}</span>{id === 'activity' && <span className="nav-dot" />}</button>)}
         </nav>
+        <button className="theme-toggle sidebar-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}<span>{isDarkMode ? 'Light mode' : 'Dark mode'}</span></button>
         <button className="sidebar-report" onClick={openReport}><Plus size={18} /> Report an issue</button>
         <div className="sidebar-bottom"><div className="sidebar-prompt"><span className="prompt-icon"><Sparkles size={17} /></span><strong>Small fixes. Big impact.</strong><span>See something that needs attention? Let your campus know.</span><button onClick={openReport}>Share a report <ArrowUp size={14} /></button></div>
           <button className="user-mini" onClick={() => userId ? setView('profile') : setAuthOpen(true)}><span className="avatar avatar-small">{profile?.display_name?.slice(0, 1).toUpperCase() ?? <Users size={15} />}</span><span><strong>{profile?.display_name ?? 'Join your campus'}</strong><small>{userId ? 'Student account' : 'Sign in or create an account'}</small></span><ChevronDown size={15} /></button>
@@ -268,8 +285,9 @@ export function CampusApp() {
       <main className="main-column">
         <header className="mobile-header">
           <a className="brand-lockup compact" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}><span className="brand-symbol"><Flame size={19} fill="currentColor" /></span><strong>campus<span className="brand-hot">heat</span></strong></a>
-          <button className="mobile-campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-label={`Campus: ${campus?.name ?? 'Choose campus'}`}><MapPin size={15} />{campus?.city ?? 'Campus'}<ChevronDown size={14} /></button>
+          <button className="mobile-campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-label={`Campus: ${campus?.name ?? 'Choose campus'}`}><MapPin size={15} /><span>{campus?.city ?? 'Campus'}</span><ChevronDown size={14} /></button>
           <button className="icon-button mobile-notifications" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Notifications"><Bell size={19} /></button>
+          <button className="icon-button mobile-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
           {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => void handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}</small></button>)}</div>}
         </header>
 
@@ -296,7 +314,7 @@ export function CampusApp() {
                 <div className="feed-tabs" role="tablist" aria-label="Feed type"><button role="tab" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'selected' : ''} onClick={() => setStatusFilter('all')}>For you</button><button role="tab" aria-selected={statusFilter === 'in_progress'} className={statusFilter === 'in_progress' ? 'selected' : ''} onClick={() => setStatusFilter('in_progress')}>In progress</button><button role="tab" aria-selected={statusFilter === 'resolved'} className={statusFilter === 'resolved' ? 'selected' : ''} onClick={() => setStatusFilter('resolved')}>Resolved</button></div>
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
               </div>
-              <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{categories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
+              <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{orderedCategories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
               {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => setSelectedIssueId(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} userId={userId} busy={busy} />)}</div>}
               <div className="feed-footer"><span>Showing {filteredIssues.length} of {issues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
             </section>
