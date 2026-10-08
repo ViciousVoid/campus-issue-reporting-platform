@@ -14,6 +14,7 @@ import {
   CATEGORY_IMAGES, STATUS_LABELS, type AppView, type Campus, type CampusIssue,
   type Category, type IssueStatus,
 } from '@/lib/campus'
+import { createDemoIssues } from '@/lib/campus-demo'
 import { IssueCard } from '@/components/campus/issue-card'
 import { IssueDetail } from '@/components/campus/issue-detail'
 import { ReportDialog } from '@/components/campus/report-dialog'
@@ -111,6 +112,8 @@ export function CampusApp() {
     if (error) return null
     return data as { thresholds: unknown } | null
   })
+  const demoIssues = useMemo(() => createDemoIssues(campusId, categories), [campusId, categories])
+  const feedIssues = useMemo(() => [...issues, ...demoIssues].sort((a, b) => b.created_at.localeCompare(a.created_at)), [demoIssues, issues])
   const thresholds: HeatThresholds = getHeatThresholds(heatSettings?.thresholds ?? DEFAULT_HEAT_THRESHOLDS)
   const isModerator = moderatorMembership?.role === 'moderator' || moderatorMembership?.role === 'admin'
   const isAdmin = moderatorMembership?.role === 'admin'
@@ -162,7 +165,7 @@ export function CampusApp() {
     return priority(a.name) - priority(b.name) || a.name.localeCompare(b.name)
   }), [categories])
   const filteredIssues = useMemo(() => {
-    const base = view === 'profile' ? userIssues : issues
+    const base = view === 'profile' ? userIssues : feedIssues
     const normalized = query.trim().toLowerCase()
     return base.filter((issue) => {
       const matchesText = !normalized || [issue.title, issue.description, issue.custom_category, issue.category?.name, issue.custom_location, issue.location?.name, issue.building_area, issue.custom_department, issue.department?.name, issue.problem_type].some((value) => value?.toLowerCase().includes(normalized))
@@ -170,7 +173,7 @@ export function CampusApp() {
       const matchesCategory = categoryFilter === 'all' || (issue.custom_category || issue.category?.name) === categoryFilter
       return matchesText && matchesStatus && matchesCategory
     })
-  }, [categoryFilter, issues, query, statusFilter, userIssues, view])
+  }, [categoryFilter, feedIssues, query, statusFilter, userIssues, view])
 
   const refreshIssues = useCallback(async () => {
     await mutate(['issues', campusId])
@@ -358,14 +361,14 @@ export function CampusApp() {
             </section>
 
             <section className="feed-content">
-              <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'FIND WHAT NEEDS ATTENTION' : 'HAPPENING AROUND YOU'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {issues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and find an issue you can help move forward.' : 'Real issues. Real people. Real progress.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
+              <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'FIND WHAT NEEDS ATTENTION' : 'HAPPENING AROUND YOU'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {feedIssues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and find an issue you can help move forward.' : 'Real issues. Real people. Real progress.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
               <div className="feed-toolbar">
                 <div className="feed-tabs" role="tablist" aria-label="Feed type"><button role="tab" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'selected' : ''} onClick={() => setStatusFilter('all')}>For you</button><button role="tab" aria-selected={statusFilter === 'in_progress'} className={statusFilter === 'in_progress' ? 'selected' : ''} onClick={() => setStatusFilter('in_progress')}>In progress</button><button role="tab" aria-selected={statusFilter === 'resolved'} className={statusFilter === 'resolved' ? 'selected' : ''} onClick={() => setStatusFilter('resolved')}>Resolved</button></div>
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
               </div>
               <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{orderedCategories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
               {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}
-              <div className="feed-footer"><span>Showing {filteredIssues.length} of {issues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
+              <div className="feed-footer"><span>Showing {filteredIssues.length} of {feedIssues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
             </section>
           </>
         )}
