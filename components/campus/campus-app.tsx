@@ -77,7 +77,12 @@ function CampusMenu({ campuses, selectedCampusId, searchInput, searchQuery, clas
 async function loadCampuses(): Promise<CampusDetails[]> {
   const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug,is_public,signup_enabled,logo_label,brand_color,brand_dark_color,banner_url').order('name')
   if (error) throw error
-  return ((data ?? []) as CampusDetails[]).filter((campus) => !isHiddenCampus(campus))
+  return ((data ?? []) as CampusDetails[])
+    .filter((campus) => !isHiddenCampus(campus))
+    .sort((a, b) => {
+      const priority = (campus: CampusDetails) => campus.slug === 'sgsits-indore' || campus.name.toLowerCase().includes('sgsits') ? 0 : 1
+      return priority(a) - priority(b) || a.name.localeCompare(b.name)
+    })
 }
 
 async function loadCategories(campusId: string): Promise<Category[]> {
@@ -142,7 +147,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [busy, setBusy] = useState(false)
   const [heroImageUploading, setHeroImageUploading] = useState(false)
   const [notice, setNotice] = useState('')
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(true)
 
   const canLoadCampusData = !userId || profile?.campus_id === campusId
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
@@ -204,8 +209,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
 
   useEffect(() => {
     const savedTheme = document.cookie.split('; ').find((cookie) => cookie.startsWith('campusheat-theme='))?.split('=')[1]
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setIsDarkMode(savedTheme ? savedTheme === 'dark' : prefersDarkMode)
+    setIsDarkMode(savedTheme ? savedTheme === 'dark' : true)
   }, [])
 
   useEffect(() => {
@@ -235,7 +239,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
       ? campuses.find((item) => item.slug === initialCampusSlug)
       : profile?.campus_id
         ? campuses.find((item) => item.id === profile.campus_id)
-        : campuses.find((item) => item.slug === 'sgsits-indore') ?? campuses[0]
+        : campuses.find((item) => item.slug === 'sgsits-indore') ?? campuses.find((item) => item.name.toLowerCase().includes('sgsits')) ?? campuses[0]
     if (requestedCampus && campusId !== requestedCampus.id) setCampusId(requestedCampus.id)
   }, [campusId, campuses, initialCampusSlug, profile?.campus_id])
 
