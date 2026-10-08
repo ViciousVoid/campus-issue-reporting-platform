@@ -517,7 +517,6 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
           </section>
         ) : view === 'chat' ? (
           <section className="content-page mobile-chat-page">
-            <PageHeading eyebrow="CAMPUS COMMUNITY" title="Campus chat" description={`Join the conversation with people at ${campus?.name ?? 'your campus'}.`} />
             <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={false} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded(false)} onRequireAuth={() => setAuthOpen(true)} />
           </section>
         ) : view === 'activity' ? (
