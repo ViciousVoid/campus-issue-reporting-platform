@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
-  CircleHelp, Clock3, Compass, Flame, ImagePlus, LoaderCircle, LogIn, MapPin,
+  CircleHelp, Clock3, Compass, Flame, ImagePlus, LoaderCircle, LogIn, MapPin, MessageCircle,
   Moon, Plus, Search, Send, ShieldCheck, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
@@ -26,7 +26,7 @@ import { DeveloperTools } from '@/components/campus/developer-tools'
 import { CampusHeroArt } from '@/components/campus/campus-hero-art'
 
 const supabase = createClient()
-const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
+const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order,uploaded_by),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
@@ -63,6 +63,13 @@ const navItems: { id: AppView; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: 'Home', icon: Flame },
   { id: 'explore', label: 'Explore', icon: Compass },
   { id: 'activity', label: 'Activity', icon: Bell },
+  { id: 'profile', label: 'Profile', icon: Users },
+]
+
+const mobileNavItems: { id: AppView; label: string; icon: LucideIcon }[] = [
+  { id: 'home', label: 'Home', icon: Flame },
+  { id: 'activity', label: 'Activity', icon: Bell },
+  { id: 'chat', label: 'Chat', icon: MessageCircle },
   { id: 'profile', label: 'Profile', icon: Users },
 ]
 
@@ -342,15 +349,22 @@ export function CampusApp() {
   async function addComment(issueId: string, body: string, parentId?: string) {
     if (!await requireUser()) return false
     setBusy(true)
-    const { error } = await supabase.from('comments').insert({ issue_id: issueId, user_id: userId!, body, parent_id: parentId ?? null })
-    setBusy(false)
-    if (error) {
-      setNotice('Your comment could not be posted.')
+    let insertFailed = false
+    try {
+      const { error } = await supabase.from('comments').insert({ issue_id: issueId, user_id: userId!, body, parent_id: parentId ?? null })
+      insertFailed = Boolean(error)
+    } catch {
+      insertFailed = true
+    } finally {
+      setBusy(false)
+    }
+    if (insertFailed) {
+      setNotice('Your comment could not be posted. Please try again.')
       return false
     }
-    await refreshIssues()
+    void refreshIssues().catch(() => undefined)
     evaluateEscalation(issueId)
-    await mutate(['comments', issueId])
+    void mutate(['comments', issueId]).catch(() => undefined)
     return true
   }
 
@@ -367,7 +381,7 @@ export function CampusApp() {
     else setReportOpen(true)
   }
 
-  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : view === 'developer' ? 'Developer options' : 'Your profile'
+  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'chat' ? 'Campus chat' : view === 'moderator' ? 'Campus operations' : view === 'developer' ? 'Developer options' : 'Your profile'
   const mapCenterIssue = issues.find((issue) => issue.latitude != null && issue.longitude != null)
   const mapCenter = useMemo(() => mapCenterIssue
     ? { latitude: mapCenterIssue.latitude!, longitude: mapCenterIssue.longitude! }
@@ -414,7 +428,12 @@ export function CampusApp() {
           {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => void handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}</small></button>)}</div>}
         </header>
 
-        {view === 'activity' ? (
+        {view === 'chat' ? (
+          <section className="content-page mobile-chat-page">
+            <PageHeading eyebrow="CAMPUS COMMUNITY" title="Campus chat" description={`Join the conversation with people at ${campus?.name ?? 'your campus'}.`} />
+            <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={false} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded(false)} onRequireAuth={() => setAuthOpen(true)} />
+          </section>
+        ) : view === 'activity' ? (
           <section className="content-page activity-page">
             <PageHeading eyebrow="STAY IN THE LOOP" title={pageTitle} description="The latest updates on the issues you care about." />
             {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : activityLoading ? <LoadingState /> : activity.length === 0 ? <EmptyState icon={Bell} title="You're all caught up" body="Updates about reports you follow will show up here." /> : <div className="activity-list">{activity.map((item) => <button key={item.id} className={`activity-item ${item.read_at ? '' : 'unread'}`} onClick={() => { if (item.issue_id) openIssue(item.issue_id); if (!item.read_at) void markRead(item.id) }}><span className="activity-icon"><Bell size={18} /></span><span className="activity-copy"><strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{timeAgo(item.created_at)}</small></span>{!item.read_at && <span className="unread-dot" />}</button>)}</div>}
@@ -456,12 +475,12 @@ export function CampusApp() {
         )}
       </main>
 
-      <aside className="right-column" aria-label="Campus chat and account" style={{ height: `${chatHeight}vh` }}>
+      <aside className={`right-column${view === 'chat' ? ' chat-view-hidden' : ''}`} aria-label="Campus chat and account" style={{ height: `${chatHeight}vh` }}>
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
-        <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />
+        {view !== 'chat' && <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />}
       </aside>
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
+      <nav className="mobile-nav" aria-label="Mobile navigation">{mobileNavItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'activity' && !userId ? setAuthOpen(true) : setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{mobileNavItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'chat' ? setView(id) : userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
 
       {notice && <div className="toast-message" role="status">{notice}</div>}
       {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} initialMapCenter={mapCenter} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}

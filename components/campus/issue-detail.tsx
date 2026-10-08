@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import useSWR, { mutate } from 'swr'
 import { ArrowDown, ArrowUp, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -37,6 +37,7 @@ const supabase = createClient()
 
 export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChanged, onVote, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
   const [body, setBody] = useState('')
+  const [commentError, setCommentError] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [workflowBusy, setWorkflowBusy] = useState(false)
   const [officialMessage, setOfficialMessage] = useState('')
@@ -96,14 +97,30 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   async function submitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!userId) { onRequireAuth(); return }
+    if (busy) return
     const text = body.trim()
     if (!text) return
-    const posted = await onComment(issue.id, text, replyTo?.id)
-    if (posted) {
-      setBody('')
-      setReplyTo(null)
-      await mutate(['comments', issue.id])
+    setCommentError('')
+    let posted = false
+    try {
+      posted = await onComment(issue.id, text, replyTo?.id)
+    } catch {
+      setCommentError('Your comment could not be posted. Please try again.')
+      return
     }
+    if (!posted) {
+      setCommentError('Your comment could not be posted. Please try again.')
+      return
+    }
+    setBody('')
+    setReplyTo(null)
+    void mutate(['comments', issue.id]).catch(() => undefined)
+  }
+
+  function submitOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
   }
 
   async function verifyResolution(result: 'fixed' | 'still_a_problem') {
@@ -259,8 +276,9 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
               <div className="comment-heading"><div><span className="eyebrow">CAMPUS CONVERSATION</span><h2 id="issue-comments-heading"><MessageCircle size={18} /> Updates & comments <span className="count-pill">{comments.length}</span></h2></div></div>
               <form className="comment-form" onSubmit={submitComment}>
                 {replyTo && <div className="reply-context">Replying to {replyTo.author?.display_name ?? 'a student'}<button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
-                <label className="sr-only" htmlFor="issue-comment">Add a comment</label><textarea id="issue-comment" rows={3} maxLength={2000} value={body} onChange={(event) => setBody(event.target.value)} placeholder={userId ? 'Share an update or helpful detail…' : 'Sign in to join the conversation'} onFocus={() => { if (!userId) onRequireAuth() }} />
-                <div className="comment-form-foot"><span>Keep it kind and constructive</span><button className="button-primary small" disabled={busy || !body.trim()}><Send size={14} /> Post</button></div>
+                <label className="sr-only" htmlFor="issue-comment">Add a comment</label><textarea id="issue-comment" rows={3} maxLength={2000} value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={submitOnEnter} placeholder={userId ? 'Share an update or helpful detail…' : 'Sign in to join the conversation'} onFocus={() => { if (!userId) onRequireAuth() }} />
+                <div className="comment-form-foot"><span>Keep it kind and constructive</span><button type="submit" className="button-primary small" disabled={busy || !body.trim()}><Send size={14} /> Post</button></div>
+                {commentError && <p className="form-error" role="alert">{commentError}</p>}
               </form>
               {isLoading ? <div className="loading-state"><Clock3 size={18} />Loading conversation…</div> : parentComments.length === 0 ? <div className="comment-empty">No comments yet. Add the first helpful update.</div> : <div className="comments-list">{parentComments.map((comment) => <article className="comment-item" key={comment.id}><span className="avatar avatar-small">{comment.author?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div className="comment-content"><div className="comment-author"><strong>{comment.author?.display_name ?? 'Campus student'}</strong><time>{relativeTime(comment.created_at)}</time></div><p>{comment.body}</p><button className="reply-button" onClick={() => { setReplyTo(comment); document.getElementById('issue-comment')?.focus() }}>Reply</button>{repliesFor(comment.id).map((reply) => <div className="comment-reply" key={reply.id}><span className="avatar avatar-tiny">{reply.author?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><div className="comment-author"><strong>{reply.author?.display_name ?? 'Campus student'}</strong><time>{relativeTime(reply.created_at)}</time></div><p>{reply.body}</p></div></div>)}</div></article>)}</div>}
             </section>

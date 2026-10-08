@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import useSWR, { mutate } from 'swr'
 import { Building2, ImagePlus, LoaderCircle, LockKeyhole, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -149,6 +149,12 @@ export function CampusChat({ campusId, campusName, userId, expanded, height, onH
     setSelectedImage(null)
   }
 
+  function submitOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
+  }
+
   return (
     <section className="campus-chat" aria-label={`Campus chat for ${campusName}`}>
       <header className="campus-chat-header">
@@ -240,6 +246,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, height, onH
               maxLength={1000}
               value={body}
               onChange={(event) => setBody(event.target.value)}
+              onKeyDown={submitOnEnter}
               onFocus={() => { if (!userId) onRequireAuth() }}
               placeholder="Message your campus…"
             />

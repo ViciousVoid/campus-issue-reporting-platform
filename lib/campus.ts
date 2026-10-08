@@ -47,7 +47,7 @@ export type CampusIssue = {
   location: { name: string; building: string | null } | null
   department: { name: string } | null
   reporter: { display_name: string; avatar_url: string | null } | null
-  media: { storage_path: string; display_order: number }[]
+  media: { storage_path: string; display_order: number; uploaded_by: string | null }[]
   votes: { value: number; user_id: string }[]
   affected_users: { user_id: string }[]
   followers: { user_id: string }[]
@@ -62,7 +62,7 @@ export type IssueStatus =
   | 'resolved'
   | 'reopened'
 
-export type AppView = 'home' | 'explore' | 'activity' | 'profile' | 'moderator' | 'developer'
+export type AppView = 'home' | 'explore' | 'activity' | 'chat' | 'profile' | 'moderator' | 'developer'
 
 export const ISSUE_STATUSES: IssueStatus[] = [
   'reported',

@@ -200,7 +200,7 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
       const uploadedPaths = uploads.filter((upload) => !upload.error).map((upload) => upload.path)
       const uploadFailed = uploads.some((upload) => upload.error)
       const mediaResult = uploadFailed ? null : await supabase.from('issue_media').insert(
-        uploadedPaths.map((path, display_order) => ({ issue_id: created.id, storage_path: path, display_order })),
+        uploadedPaths.map((path, display_order) => ({ issue_id: created.id, storage_path: path, display_order, uploaded_by: userId })),
       )
       if (uploadFailed || mediaResult?.error) {
         if (uploadedPaths.length) await supabase.storage.from('issue-photos').remove(uploadedPaths)
