@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Camera, ImagePlus, LoaderCircle, MapPin, Sparkles, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Category } from '@/lib/campus'
+import { LocationMapWidget, type Coordinates } from '@/components/campus/map-widgets'
 
 type Option = { id: string; name: string; building?: string | null }
 type ReportDialogProps = {
@@ -14,6 +15,7 @@ type ReportDialogProps = {
   onClose: () => void
   onRequireAuth: () => void
   onCreated: (warning?: string) => void | Promise<void>
+  initialMapCenter?: Coordinates | null
 }
 type PhotoSelection = { file: File; preview: string }
 const supabase = createClient()
@@ -27,11 +29,13 @@ type IssueSuggestions = {
   duplicate: { id: string; title: string; confidence: number } | null
 }
 
-export function ReportDialog({ campusId, categories, locations, departments, onClose, onRequireAuth, onCreated }: ReportDialogProps) {
+export function ReportDialog({ campusId, categories, locations, departments, onClose, onRequireAuth, onCreated, initialMapCenter }: ReportDialogProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [locationId, setLocationId] = useState('')
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null)
+  const [locating, setLocating] = useState(false)
   const [departmentId, setDepartmentId] = useState('')
   const [buildingArea, setBuildingArea] = useState('')
   const [facultyTag, setFacultyTag] = useState('')
@@ -118,6 +122,26 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
     }
   }
 
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setError('Location is not available in this browser. Select the location on the map instead.')
+      return
+    }
+    setLocating(true)
+    setError('')
+    navigator.geolocation.getCurrentPosition(
+      ({ coords: current }) => {
+        setCoordinates({ latitude: current.latitude, longitude: current.longitude })
+        setLocating(false)
+      },
+      () => {
+        setError('We couldn’t access your current location. Choose it directly on the map instead.')
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+    )
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
@@ -128,6 +152,7 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
     const otherCategoryId = categories.find((category) => category.name.toLowerCase() === 'other')?.id
     const resolvedCategoryId = categoryId === OTHER_OPTION_ID ? otherCategoryId : categoryId
     if (!resolvedCategoryId) { setError('Choose a category, or select Other and enter a label.'); return }
+    if (!coordinates) { setError('Choose the exact problem location on the map, or use your current location.'); return }
     setSubmitting(true)
     const { data: authData } = await supabase.auth.getUser()
     const userId = authData.user?.id
@@ -151,6 +176,8 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
         customDepartment: customDepartment.trim() || null,
         problemType: problemType.trim() || null,
         severity,
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
       }),
     })
     const result = await response.json().catch(() => ({}))
@@ -195,7 +222,8 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
           <label className="form-field"><span>Tell us a little more <b>*</b></span><textarea required minLength={20} maxLength={5000} rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is happening, when did you notice it, and who is affected?" /><small>{description.trim().length}/5000</small></label>
           <button className="ai-suggest-button" type="button" disabled={analyzing || title.trim().length < 8 || description.trim().length < 20} onClick={() => void requestSuggestions()}>{analyzing ? <LoaderCircle size={16} className="spin" /> : <Sparkles size={16} />}{analyzing ? 'Reviewing your report…' : suggestions ? 'Refresh AI suggestions' : 'Suggest details with AI'}</button>
           {suggestions && <p className="suggestion-note" role="status">Suggestions are a starting point. Review and edit every field before submitting.</p>}
-          <div className="form-grid-two"><label className="form-field"><span>Category <b>*</b></span><select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Select a category</option>{orderedCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}{!orderedCategories.some((category) => category.name.toLowerCase() === 'other') && <option value={OTHER_OPTION_ID}>Other</option>}</select></label><label className="form-field"><span>Location</span><select value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose a campus area</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.building && location.building !== location.name ? ` · ${location.building}` : ''}</option>)}<option value={OTHER_OPTION_ID}>Other / not listed</option></select></label></div>
+          <div className="form-grid-two"><label className="form-field"><span>Category <b>*</b></span><select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)}><option value="">Select a category</option>{orderedCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}{!orderedCategories.some((category) => category.name.toLowerCase() === 'other') && <option value={OTHER_OPTION_ID}>Other</option>}</select></label><label className="form-field"><span>Campus area</span><select value={locationId} onChange={(event) => setLocationId(event.target.value)}><option value="">Choose a campus area</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.building && location.building !== location.name ? ` · ${location.building}` : ''}</option>)}<option value={OTHER_OPTION_ID}>Other / not listed</option></select></label></div>
+          <div className="report-location-picker"><div className="location-picker-heading"><div><strong>Pin the exact problem location <b>*</b></strong><span>Tap the map to place the pin, or use your current location.</span></div><button type="button" className="button-secondary location-button" onClick={useCurrentLocation} disabled={locating}>{locating ? <LoaderCircle size={15} className="spin" /> : <MapPin size={15} />}{locating ? 'Locating…' : 'Use my location'}</button></div><LocationMapWidget selected={coordinates} onSelect={(next) => { setCoordinates(next); setError('') }} initialCenter={initialMapCenter} />{coordinates ? <p className="location-coordinates" role="status">Location pinned · {coordinates.latitude.toFixed(5)}, {coordinates.longitude.toFixed(5)} <button type="button" onClick={() => setCoordinates(null)}>Clear pin</button></p> : <p className="location-coordinates location-coordinates-empty">A map pin is required to submit this report.</p>}</div>
           {isOtherCategory && <label className="form-field"><span>Category label <small>Optional detail</small></span><input maxLength={100} value={customCategory} onChange={(event) => setCustomCategory(event.target.value)} placeholder="What kind of issue is it?" /></label>}
           {isOtherLocation && <label className="form-field"><span>Campus area <small>Optional detail</small></span><input maxLength={180} value={customLocation} onChange={(event) => setCustomLocation(event.target.value)} placeholder="Name the campus area" /></label>}
           <div className="form-grid-two"><label className="form-field"><span>Specific area</span><input maxLength={180} value={buildingArea} onChange={(event) => setBuildingArea(event.target.value)} placeholder="Floor, room, or nearby landmark" /></label><label className="form-field"><span>Suggested team</span><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Let campus route it</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}<option value={OTHER_OPTION_ID}>Other team</option></select></label></div>
@@ -205,7 +233,7 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
           <label className="form-field"><span>Faculty or staff tag <small>Optional</small></span><input maxLength={120} value={facultyTag} onChange={(event) => setFacultyTag(event.target.value)} placeholder="Name or role to notify" /></label>
           <div className="upload-block"><span className="upload-label">Add photos <small>Optional · up to {MAX_PHOTOS}, 10 MB each</small></span>{photos.length > 0 && <div className="upload-photo-grid">{photos.map((photo, index) => <div className="upload-preview" key={photo.preview}><img src={photo.preview} alt={`Selected issue photo ${index + 1}`} /><button type="button" onClick={() => removePhoto(photo.preview)} aria-label={`Remove photo ${index + 1}`}><X size={15} /></button></div>)}</div>}{photos.length < MAX_PHOTOS && <button type="button" className="upload-trigger" onClick={() => inputRef.current?.click()}><ImagePlus size={19} /><span><strong>{photos.length ? 'Add another photo' : 'Choose photos or use camera'}</strong><small>JPG, PNG, WebP, or HEIC</small></span><Camera size={18} /></button>}<input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple onChange={(event) => { selectFiles(event.target.files); event.currentTarget.value = '' }} /></div>
           <label className="checkbox-row"><input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} /><span><strong>Post without my name</strong><small>Your identity is still visible to campus moderators.</small></span></label>
-          <div className="privacy-note"><MapPin size={15} /><span>This report will be visible to the <strong>campus community</strong>.</span></div>
+          <div className="privacy-note"><MapPin size={15} /><span>Your report and exact map pin will be visible to the <strong>campus community</strong>. Avoid pinning private residences.</span></div>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer className="dialog-actions"><button type="button" className="button-secondary" onClick={onClose}>Cancel</button><button className="button-primary" disabled={submitting}>{submitting ? <LoaderCircle size={16} className="spin" /> : null}{submitting ? 'Submitting…' : 'Submit report'}</button></footer>
         </form>

@@ -27,12 +27,12 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
   const photo = path
     ? supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
     : `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
-  const upVotes = issue.votes?.filter((vote) => vote.value === 1).length ?? 0
+  const upVotes = issue.developer_upvote_override ?? issue.votes?.filter((vote) => vote.value === 1).length ?? 0
   const heatScore = scoreIssueHeat(issue, getIssueRecurrenceCount(issue, issues))
   const heatLevel: HeatLevel = getHeatLevel(heatScore, thresholds)
   const showHeatLevel = !issue.demoOnly && heatLevel !== 'normal'
   const flameBorder = upVotes > 40 ? 'issue-card-flame-blue-magenta' : upVotes > 15 ? 'issue-card-flame-ember' : ''
-  const downVotes = issue.votes?.filter((vote) => vote.value === -1).length ?? 0
+  const downVotes = issue.developer_downvote_override ?? issue.votes?.filter((vote) => vote.value === -1).length ?? 0
   const hasVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === 1))
   const hasDownVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === -1))
   const isFollowing = Boolean(userId && issue.followers?.some((follower) => follower.user_id === userId))

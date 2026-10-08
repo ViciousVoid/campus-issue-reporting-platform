@@ -12,10 +12,25 @@ export type CampusMapProps = {
   className?: string
 }
 
-const CampusMap = dynamic<CampusMapProps>(() => import('@/components/campus/campus-map-client').then((module) => module.CampusMapClient), {
+const CampusIssueMap = dynamic(() => import('@/components/campus/leaflet-map').then((module) => module.CampusIssueMap), {
   ssr: false,
-  loading: () => <div className="campus-map-loading" role="status">Loading campus map…</div>,
+  loading: () => <div className="map-loading" role="status">Loading campus map…</div>,
 })
 
-export { CampusMap }
+const LocationPickerMap = dynamic(() => import('@/components/campus/leaflet-map').then((module) => module.LocationPickerMap), {
+  ssr: false,
+  loading: () => <div className="map-loading picker-loading" role="status">Preparing location picker…</div>,
+})
+
+export function CampusMap({ issues, selectedPoint, onPointSelect, onIssueSelect, className = '' }: CampusMapProps) {
+  if (onPointSelect) {
+    return <div className={className}><LocationPickerMap selected={selectedPoint ?? null} onSelect={onPointSelect} /></div>
+  }
+
+  return <div className={className}><CampusIssueMap issues={issues} onSelectIssue={(issueId) => {
+    const issue = issues.find((item) => item.id === issueId)
+    if (issue) onIssueSelect?.(issue)
+  }} /></div>
+}
+
 export default CampusMap

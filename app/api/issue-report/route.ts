@@ -20,6 +20,8 @@ const reportSchema = z.object({
   customDepartment: z.string().trim().max(120).nullable().optional(),
   problemType: z.string().trim().max(120).nullable().optional(),
   severity: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
 })
 
 const moderationSchema = z.object({ outcome: z.enum(['approved', 'review', 'rejected']), reason: z.string().max(500) })
@@ -81,6 +83,8 @@ export async function POST(request: Request) {
     custom_department: input.customDepartment || null,
     problem_type: input.problemType || null,
     severity: input.severity,
+    latitude: input.latitude,
+    longitude: input.longitude,
     moderation_status: moderation.outcome === 'approved' ? 'approved' : moderation.outcome === 'rejected' ? 'rejected' : 'pending',
     moderation_reason: moderation.reason,
     duplicate_of: duplicateId,

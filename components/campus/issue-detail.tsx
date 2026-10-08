@@ -70,8 +70,8 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
   })
   const parentComments = comments.filter((comment) => !comment.parent_id)
   const repliesFor = (parentId: string) => comments.filter((comment) => comment.parent_id === parentId)
-  const upVotes = issue.votes.filter((vote) => vote.value === 1).length
-  const downVotes = issue.votes.filter((vote) => vote.value === -1).length
+  const upVotes = issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length
+  const downVotes = issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length
   const affected = issue.affected_users.some((entry) => entry.user_id === userId)
 
   async function submitComment(event: FormEvent<HTMLFormElement>) {

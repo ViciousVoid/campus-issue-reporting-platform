@@ -5,7 +5,7 @@ import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
   CircleHelp, Clock3, Compass, Flame, Heart, ImagePlus, LoaderCircle, LogIn, MapPin,
-  MessageCircle, Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, X,
+  MessageCircle, Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -21,9 +21,11 @@ import { ReportDialog } from '@/components/campus/report-dialog'
 import { AuthDialog } from '@/components/campus/auth-dialog'
 import { ModeratorDashboard } from '@/components/campus/moderator-dashboard'
 import { DEFAULT_HEAT_THRESHOLDS, getHeatThresholds, type HeatThresholds } from '@/lib/campus-heat'
+import { CampusMap } from '@/components/campus/campus-map'
+import { DeveloperTools } from '@/components/campus/developer-tools'
 
 const supabase = createClient()
-const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,ai_summary,ai_summary_updated_at,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
+const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,ai_summary,ai_summary_updated_at,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
@@ -302,7 +304,10 @@ export function CampusApp() {
     else setReportOpen(true)
   }
 
-  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : 'Your profile'
+  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : view === 'developer' ? 'Developer options' : 'Your profile'
+  const mapCenterIssue = issues.find((issue) => issue.latitude != null && issue.longitude != null)
+  const mapCenter = mapCenterIssue ? { latitude: mapCenterIssue.latitude!, longitude: mapCenterIssue.longitude! } : null
+  const mappedIssueCount = feedIssues.filter((issue) => !issue.demoOnly && issue.latitude != null && issue.longitude != null).length
 
   return (
     <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}`}>
@@ -324,6 +329,7 @@ export function CampusApp() {
         <nav className="side-links" aria-label="Main">
           {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={19} /><span>{label}</span>{id === 'activity' && <span className="nav-dot" />}</button>)}
           {isModerator && <button className={`side-link ${view === 'moderator' ? 'active' : ''}`} onClick={() => setView('moderator')}><ShieldCheck size={19} /><span>Campus operations</span></button>}
+          {isAdmin && <button className={`side-link ${view === 'developer' ? 'active' : ''}`} onClick={() => setView('developer')}><Wrench size={19} /><span>Developer options</span></button>}
         </nav>
         <button className="theme-toggle sidebar-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}<span>{isDarkMode ? 'Light mode' : 'Dark mode'}</span></button>
         <button className="sidebar-report" onClick={openReport}><Plus size={18} /> Report an issue</button>
@@ -336,6 +342,7 @@ export function CampusApp() {
         <header className="mobile-header">
           <a className="brand-lockup compact" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}><span className="brand-symbol"><Flame size={19} fill="currentColor" /></span><strong>campus<span className="brand-hot">heat</span></strong></a>
           <button className="mobile-campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-label={`Campus: ${campus?.name ?? 'Choose campus'}`}><MapPin size={15} /><span>{campus?.city ?? 'Campus'}</span><ChevronDown size={14} /></button>
+          {isAdmin && <button className="icon-button mobile-dev-button" onClick={() => setView('developer')} aria-label="Developer options"><Wrench size={18} /></button>}
           <button className="icon-button mobile-notifications" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Notifications"><Bell size={19} /></button>
           <button className="icon-button mobile-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
           {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => void handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}</small></button>)}</div>}
@@ -347,7 +354,9 @@ export function CampusApp() {
             {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : activityLoading ? <LoadingState /> : activity.length === 0 ? <EmptyState icon={Bell} title="You're all caught up" body="Updates about reports you follow will show up here." /> : <div className="activity-list">{activity.map((item) => <button key={item.id} className={`activity-item ${item.read_at ? '' : 'unread'}`} onClick={() => { if (item.issue_id) openIssue(item.issue_id); if (!item.read_at) void markRead(item.id) }}><span className="activity-icon"><Bell size={18} /></span><span className="activity-copy"><strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{timeAgo(item.created_at)}</small></span>{!item.read_at && <span className="unread-dot" />}</button>)}</div>}
           </section>
         ) : view === 'moderator' ? (
-          isModerator ? <ModeratorDashboard key={campusId} campusId={campusId} issues={issues} categories={categories} locations={locations} departments={departments} moderators={campusModerators} thresholds={thresholds} onOpenIssue={openIssue} onChanged={async () => { await refreshIssues(); await mutate(['issue-heat-settings', campusId]) }} isAdmin={isAdmin} /> : <section className="content-page"><PageHeading eyebrow="CAMPUS OPERATIONS" title="Moderator access required" description="This workspace is available to authorized campus moderators." /><EmptyState icon={ShieldCheck} title="This area is restricted" body="Ask a campus administrator to add you to the moderator team." /></section>
+          isModerator ? <ModeratorDashboard key={campusId} campusId={campusId} issues={issues} categories={categories} locations={locations} departments={departments} moderators={campusModerators} thresholds={thresholds} onOpenIssue={openIssue} onChanged={async () => { await refreshIssues(); await mutate(['issue-heat-settings', campusId]) }} isAdmin={isAdmin} /> : <section className="content-page"><PageHeading eyebrow="CAMPUS OPERATIONS" title="Moderator access required" description="This workspace is available to authorized campus moderators." /><EmptyState icon={ShieldCheck} title="This area is restricted" body="Ask a campus administrator to add you to the campus moderator team." /></section>
+        ) : view === 'developer' ? (
+          isAdmin ? <DeveloperTools key={campusId} campusId={campusId} /> : <section className="content-page"><PageHeading eyebrow="ADMIN-ONLY SANDBOX" title="Developer access required" description="These testing controls are restricted to campus administrators." /><EmptyState icon={ShieldCheck} title="This area is restricted" body="Switch to a campus where you have administrator access." /></section>
         ) : view === 'profile' ? (
           <section className="content-page profile-page">
             <PageHeading eyebrow="YOUR CAMPUS FOOTPRINT" title={pageTitle} description="Every report is a step toward a better campus." />
@@ -359,6 +368,8 @@ export function CampusApp() {
               <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> YOUR CAMPUS, YOUR VOICE</span><h1>A better campus<br />starts <em>with us.</em></h1><p>Spot something that needs fixing? Share it with your campus community and help make change happen.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
               <div className="welcome-art" aria-hidden="true"><div className="art-sun" /><div className="art-ground ground-back" /><div className="art-ground ground-front" /><div className="art-building building-one"><span /><span /><span /><span /></div><div className="art-building building-two"><span /><span /><span /></div><div className="art-tree tree-one" /><div className="art-tree tree-two" /><div className="art-path" /><span className="art-spark spark-one">✳</span><span className="art-spark spark-two">✳</span><div className="art-note"><span><Flame size={14} fill="currentColor" /></span><strong>Good change<br />is contagious.</strong></div></div>
             </section>
+
+            <section className="mobile-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">PINNED REPORTS</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Tap a pin to open its report</span></div><CampusMap issues={feedIssues} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /></section>
 
             <section className="feed-content">
               <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'FIND WHAT NEEDS ATTENTION' : 'HAPPENING AROUND YOU'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {feedIssues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and find an issue you can help move forward.' : 'Real issues. Real people. Real progress.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
@@ -376,6 +387,7 @@ export function CampusApp() {
 
       <aside className="right-column" aria-label="Campus highlights">
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <button className="user-chip" onClick={() => setView('profile')}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}</button> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
+        <section className="campus-map-card" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">PINNED REPORTS</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div></div><CampusMap issues={feedIssues} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Only reports with a verified map pin appear here.</p></section>
         <section className="campus-card"><div className="campus-card-top"><span className="campus-card-icon"><Building2 size={17} /></span><span className="eyebrow">YOUR CAMPUS</span><button aria-label="Change campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)}><ChevronDown size={16} /></button></div><h2>{campus?.name ?? 'Campus community'}</h2><p><MapPin size={14} />{campus?.city ?? 'Choose your campus'}</p><div className="campus-stats"><div><strong>{issues.length}</strong><span>open reports</span></div><div><strong>{issues.filter((issue) => issue.status === 'resolved').length}</strong><span>resolved</span></div></div><button className="campus-card-link" onClick={() => setView('explore')}>Explore campus <ArrowUp size={14} /></button></section>
         <section className="progress-card"><div className="side-section-heading"><div><span className="eyebrow">COMMUNITY MOMENTUM</span><h3>Good things move.</h3></div><Sparkles size={17} /></div><div className="progress-metric"><strong>{issues.reduce((total, issue) => total + issue.affected_users.length, 0)}</strong><span>students have spoken up</span></div><div className="progress-bar"><span style={{ width: `${Math.min(100, Math.max(16, issues.length ? (issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100 : 16))}%` }} /></div><div className="progress-foot"><span>Campus follow-through</span><span>{issues.length ? Math.round((issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100) : 0}%</span></div></section>
         <section className="trending-section"><div className="side-section-heading"><div><span className="eyebrow">PICKING UP STEAM</span><h3>Most discussed</h3></div><Flame size={17} fill="currentColor" /></div>{issues.slice().sort((a, b) => b.comments.length + b.affected_users.length - a.comments.length - a.affected_users.length).slice(0, 3).map((issue, index) => <button key={issue.id} className="trending-item" onClick={() => openIssue(issue.id)}><span className={`trending-rank ${index === 0 ? 'hot' : ''}`}>0{index + 1}</span><span><strong>{issue.title}</strong><small><MessageCircle size={12} /> {issue.comments.length} comments · {timeAgo(issue.created_at)}</small></span><ArrowUp size={14} /></button>)}</section>
@@ -386,11 +398,15 @@ export function CampusApp() {
       <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
 
       {notice && <div className="toast-message" role="status">{notice}</div>}
-      {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
+      {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} initialMapCenter={mapCenter} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
       {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) setProfile(data as Profile); else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
       {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} isModerator={isModerator} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )
+}
+
+function MapLegend() {
+  return <div className="map-legend" aria-label="Problem severity colors"><span><i className="severity-low" />Low</span><span><i className="severity-medium" />Medium</span><span><i className="severity-high" />High</span><span><i className="severity-critical" />Critical</span></div>
 }
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {

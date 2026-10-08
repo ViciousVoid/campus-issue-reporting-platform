@@ -34,6 +34,10 @@ export type CampusIssue = {
   custom_location?: string | null
   custom_department?: string | null
   problem_type?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  developer_upvote_override?: number | null
+  developer_downvote_override?: number | null
   assigned_to?: string | null
   resolved_at?: string | null
   resolution_verification?: 'fixed' | 'still_a_problem' | 'merged' | null
@@ -61,7 +65,7 @@ export type IssueStatus =
   | 'resolved'
   | 'reopened'
 
-export type AppView = 'home' | 'explore' | 'activity' | 'profile' | 'moderator'
+export type AppView = 'home' | 'explore' | 'activity' | 'profile' | 'moderator' | 'developer'
 
 export const ISSUE_STATUSES: IssueStatus[] = [
   'reported',
