@@ -102,7 +102,8 @@ export function CampusApp() {
 
   useEffect(() => {
     const savedTheme = document.cookie.split('; ').find((cookie) => cookie.startsWith('campusheat-theme='))?.split('=')[1]
-    if (savedTheme === 'dark') setIsDarkMode(true)
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches
+    setIsDarkMode(savedTheme ? savedTheme === 'dark' : prefersDarkMode)
   }, [])
 
   useEffect(() => {
