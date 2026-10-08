@@ -245,15 +245,15 @@
 .community-note { display: flex; gap: 8px; align-items: flex-start; margin-top: 20px; padding: 11px; border-radius: 10px; color: #66806a; background: #eef4ed; }.community-note > svg { flex: 0 0 auto; }.community-note strong,.community-note small { display: block; }.community-note strong { font-size: 9px; }.community-note small { margin-top: 4px; color: #849185; font-size: 8px; line-height: 1.45; }
 .right-footer { display: flex; justify-content: flex-start; gap: 6px; margin-top: 22px; color: #9ba39c; font-size: 8px; }
 .campus-chat { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
-.campus-chat-header { min-height: 61px; padding: 11px 10px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid var(--border); }
+.campus-chat-header { min-height: 61px; padding: 9px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 9px; border-bottom: 1px solid var(--border); }
 .campus-chat-icon { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--accent-dark); background: #fff0e9; }
-.campus-chat-title { min-width: 0; flex: 1; }
+.campus-chat-title { min-width: 0; flex: 1; order: 1; }
 .campus-chat-title strong,.campus-chat-title span { display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .campus-chat-title strong { font-size: 12px; }
 .campus-chat-title span { margin-top: 4px; color: var(--subtle-ink); font-size: 9px; }
-.campus-chat-expand { width: 30px; height: 30px; flex: 0 0 auto; }
-.campus-chat-height-control { min-width: 88px; display: flex; align-items: center; gap: 5px; color: var(--subtle-ink); font-size: 8px; }
-.campus-chat-height-control input { width: 62px; height: 16px; accent-color: var(--accent); cursor: ew-resize; }
+.campus-chat-expand { width: 30px; height: 30px; flex: 0 0 auto; order: 2; margin-left: auto; }
+.campus-chat-height-control { min-width: 0; flex: 1 0 100%; order: 3; display: flex; align-items: center; gap: 5px; color: var(--subtle-ink); font-size: 8px; }
+.campus-chat-height-control input { width: auto; min-width: 0; height: 22px; flex: 1; accent-color: var(--accent); cursor: ew-resize; touch-action: none; }
 .campus-chat-height-control output { min-width: 23px; text-align: right; font-variant-numeric: tabular-nums; }
 .campus-chat-community { min-height: 35px; padding: 8px 11px; display: flex; align-items: center; gap: 7px; border-bottom: 1px solid var(--border); color: var(--subtle-ink); font-size: 9px; }
 .campus-chat-community svg { flex: 0 0 auto; color: var(--sage); }
