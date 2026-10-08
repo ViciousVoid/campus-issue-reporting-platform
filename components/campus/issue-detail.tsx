@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 import useSWR, { mutate } from 'swr'
-import { ArrowDown, ArrowUp, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { relativeTime, statusStyles } from '@/components/campus/issue-card'
@@ -38,7 +38,6 @@ const supabase = createClient()
 export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChanged, onVote, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
   const [body, setBody] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
-  const [summary, setSummary] = useState(issue.ai_summary ?? '')
   const [workflowBusy, setWorkflowBusy] = useState(false)
   const [officialMessage, setOfficialMessage] = useState('')
   const [workflowError, setWorkflowError] = useState('')
@@ -53,6 +52,17 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [verification, setVerification] = useState<'fixed' | 'still_a_problem' | null>(null)
   const [verificationNote, setVerificationNote] = useState('')
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
   useEffect(() => {
     setAdminUpvotes(String(issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length))
     setAdminDownvotes(String(issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length))
@@ -93,21 +103,6 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
       setBody('')
       setReplyTo(null)
       await mutate(['comments', issue.id])
-    }
-  }
-
-  async function summarizeDiscussion() {
-    if (!userId) { onRequireAuth(); return }
-    setWorkflowBusy(true)
-    setWorkflowError('')
-    try {
-      const result = await runWorkflow({ action: 'summarize', issueId: issue.id })
-      setSummary(result.summary)
-      await mutate(['comments', issue.id])
-    } catch (error) {
-      setWorkflowError(error instanceof Error ? error.message : 'Could not summarize this discussion.')
-    } finally {
-      setWorkflowBusy(false)
     }
   }
 
@@ -219,12 +214,13 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   }
 
   return (
-    <div className="overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="overlay issue-detail-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section className="issue-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-title">
-        <header className="dialog-topbar"><span className="eyebrow">ISSUE DETAILS</span><button className="icon-button" onClick={onClose} aria-label="Close issue details"><X size={20} /></button></header>
+        <header className="dialog-topbar"><span className="eyebrow">CAMPUS POST & DISCUSSION</span><button className="icon-button" onClick={onClose} aria-label="Close post and comments"><X size={20} /></button></header>
         <div className="detail-scroll">
-          <IssuePhotoGallery issue={issue} userId={userId} onRequireAuth={onRequireAuth} onPhotosChanged={onPhotosChanged} />
-          <div className="detail-body">
+          <div className="detail-post-pane">
+            <IssuePhotoGallery issue={issue} userId={userId} onRequireAuth={onRequireAuth} onPhotosChanged={onPhotosChanged} />
+            <div className="detail-body">
             <div className="detail-meta"><span className="category-mark">{(issue.custom_category || issue.category?.name)?.slice(0, 1) ?? 'C'}</span><strong>{issue.custom_category || issue.category?.name || 'Campus issue'}</strong><span>·</span><span>{relativeTime(issue.created_at)}</span></div>
             {isAdmin && <section className="issue-admin-controls" aria-label="Post administration">
               <div className="issue-admin-heading"><strong>Post admin controls</strong>{!adminEditing && <button type="button" className="button-secondary small" onClick={() => { setAdminTitle(issue.title); setAdminDescription(issue.description); setAdminError(''); setAdminEditing(true) }}><Pencil size={14} /> Edit post</button>}</div>
@@ -255,18 +251,18 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
               <button className={`action-button ${voteRows?.value === 1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, 1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === 1}><ArrowUp size={17} /> Upvote <strong>{upVotes}</strong></button>
               <button className={`action-button ${voteRows?.value === -1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, -1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === -1}><ArrowDown size={17} /> Downvote <strong>{downVotes}</strong></button>
             </div>
-            <div className="comment-section">
-              <div className="comment-heading"><div><span className="eyebrow">CAMPUS CONVERSATION</span><h2><MessageCircle size={18} /> Updates & comments <span className="count-pill">{comments.length}</span></h2></div></div>
+            </div>
+          </div>
+          <div className="detail-discussion-pane">
+
+            <section className="comment-section" aria-labelledby="issue-comments-heading">
+              <div className="comment-heading"><div><span className="eyebrow">CAMPUS CONVERSATION</span><h2 id="issue-comments-heading"><MessageCircle size={18} /> Updates & comments <span className="count-pill">{comments.length}</span></h2></div></div>
               <form className="comment-form" onSubmit={submitComment}>
                 {replyTo && <div className="reply-context">Replying to {replyTo.author?.display_name ?? 'a student'}<button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={14} /></button></div>}
                 <label className="sr-only" htmlFor="issue-comment">Add a comment</label><textarea id="issue-comment" rows={3} maxLength={2000} value={body} onChange={(event) => setBody(event.target.value)} placeholder={userId ? 'Share an update or helpful detail…' : 'Sign in to join the conversation'} onFocus={() => { if (!userId) onRequireAuth() }} />
                 <div className="comment-form-foot"><span>Keep it kind and constructive</span><button className="button-primary small" disabled={busy || !body.trim()}><Send size={14} /> Post</button></div>
               </form>
               {isLoading ? <div className="loading-state"><Clock3 size={18} />Loading conversation…</div> : parentComments.length === 0 ? <div className="comment-empty">No comments yet. Add the first helpful update.</div> : <div className="comments-list">{parentComments.map((comment) => <article className="comment-item" key={comment.id}><span className="avatar avatar-small">{comment.author?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div className="comment-content"><div className="comment-author"><strong>{comment.author?.display_name ?? 'Campus student'}</strong><time>{relativeTime(comment.created_at)}</time></div><p>{comment.body}</p><button className="reply-button" onClick={() => { setReplyTo(comment); document.getElementById('issue-comment')?.focus() }}>Reply</button>{repliesFor(comment.id).map((reply) => <div className="comment-reply" key={reply.id}><span className="avatar avatar-tiny">{reply.author?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><div className="comment-author"><strong>{reply.author?.display_name ?? 'Campus student'}</strong><time>{relativeTime(reply.created_at)}</time></div><p>{reply.body}</p></div></div>)}</div></article>)}</div>}
-            </div>
-            <section className="discussion-summary" aria-label="AI discussion summary">
-              <div className="accountability-heading"><div><span className="eyebrow">AI DISCUSSION BRIEF</span><h2><Sparkles size={16} /> Community summary</h2></div><button type="button" className="button-secondary small" disabled={workflowBusy || comments.length < 8} onClick={() => void summarizeDiscussion()}>{workflowBusy ? <LoaderCircle size={14} className="spin" /> : null}{summary ? 'Refresh summary' : 'Summarize'}</button></div>
-              {summary ? <p>{summary}</p> : <small>{comments.length < 8 ? `Available after ${8 - comments.length} more ${8 - comments.length === 1 ? 'comment' : 'comments'}.` : 'Create a concise summary of the discussion so far.'}</small>}
             </section>
             {issue.status === 'resolved' || issue.status === 'reopened' ? <section className="resolution-check-panel"><div className="accountability-heading"><div><span className="eyebrow">COMMUNITY VERIFICATION</span><h2>Is it actually fixed?</h2></div><span className="resolution-counts">{resolutionChecks.filter((check) => check.result === 'fixed').length} fixed · {resolutionChecks.filter((check) => check.result === 'still_a_problem').length} still open</span></div><p>Help the campus team verify the resolution. Three community confirmations are needed to mark it verified.</p><label className="form-field"><span>Optional note</span><textarea rows={2} maxLength={1000} value={verificationNote} onChange={(event) => setVerificationNote(event.target.value)} placeholder="Share what you observed" /></label><div className="verification-actions"><button type="button" className={`button-secondary small${myVerification === 'fixed' ? ' selected' : ''}`} disabled={workflowBusy} onClick={() => void verifyResolution('fixed')}><Check size={14} /> Fixed</button><button type="button" className={`button-secondary small${myVerification === 'still_a_problem' ? ' selected' : ''}`} disabled={workflowBusy} onClick={() => void verifyResolution('still_a_problem')}><X size={14} /> Still a problem</button></div></section> : null}
             {isModerator && <form className="official-response-form" onSubmit={postOfficialResponse}><span className="eyebrow">CAMPUS TEAM RESPONSE</span><label className="sr-only" htmlFor="official-response">Post an official response</label><textarea id="official-response" rows={3} maxLength={2000} value={officialMessage} onChange={(event) => setOfficialMessage(event.target.value)} placeholder="Share an official update or next step…" /><button className="button-primary small" disabled={workflowBusy || officialMessage.trim().length < 4}>{workflowBusy ? <LoaderCircle size={14} className="spin" /> : <Send size={14} />} Post official response</button></form>}

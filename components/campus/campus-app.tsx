@@ -16,6 +16,7 @@ import {
 } from '@/lib/campus'
 import { IssueCard } from '@/components/campus/issue-card'
 import { IssueDetail } from '@/components/campus/issue-detail'
+import { CampusChat } from '@/components/campus/campus-chat'
 import { ReportDialog } from '@/components/campus/report-dialog'
 import { AuthDialog } from '@/components/campus/auth-dialog'
 import { ModeratorDashboard } from '@/components/campus/moderator-dashboard'
@@ -25,7 +26,7 @@ import { DeveloperTools } from '@/components/campus/developer-tools'
 import { CampusHeroArt } from '@/components/campus/campus-hero-art'
 
 const supabase = createClient()
-const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,ai_summary,ai_summary_updated_at,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
+const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
@@ -74,6 +75,7 @@ export function CampusApp() {
   const [reportOpen, setReportOpen] = useState(false)
   const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
+  const [chatExpanded, setChatExpanded] = useState(false)
   const [mapFocusIssueId, setMapFocusIssueId] = useState<string | null>(null)
   const [mapScrollIssueId, setMapScrollIssueId] = useState<string | null>(null)
   const mapPanelRef = useRef<HTMLElement | null>(null)
@@ -374,7 +376,7 @@ export function CampusApp() {
   const mappedIssueCount = feedIssues.filter((issue) => issue.latitude != null && issue.longitude != null).length
 
   return (
-    <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}`}>
+    <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}${chatExpanded ? ' chat-expanded' : ''}`}>
       <aside className="campus-sidebar" aria-label="Main navigation">
         <a className="brand-lockup" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}>
           <span className="brand-symbol"><Flame size={21} fill="currentColor" /></span>
@@ -453,11 +455,9 @@ export function CampusApp() {
         )}
       </main>
 
-      <aside className="right-column" aria-label="Campus highlights">
+      <aside className="right-column" aria-label="Campus chat and account">
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
-        <section className="campus-card"><div className="campus-card-top"><span className="campus-card-icon"><Building2 size={17} /></span><span className="eyebrow">YOUR CAMPUS</span><button aria-label="Change campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)}><ChevronDown size={16} /></button></div><h2>{campus?.name ?? 'Campus community'}</h2><p><MapPin size={14} />{campus?.city ?? 'Choose your campus'}</p><div className="campus-stats"><div><strong>{issues.length}</strong><span>open reports</span></div><div><strong>{issues.filter((issue) => issue.status === 'resolved').length}</strong><span>resolved</span></div></div><button className="campus-card-link" onClick={() => setView('explore')}>Explore campus <ArrowUp size={14} /></button></section>
-        <div className="community-note"><ShieldCheck size={17} /><span><strong>Posting guidelines</strong><small>Keep discussions respectful and focused on campus issues.</small></span></div>
-        <footer className="right-footer"><span>© 2026 campusheat</span></footer>
+        <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />
       </aside>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>

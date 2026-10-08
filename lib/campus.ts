@@ -41,8 +41,6 @@ export type CampusIssue = {
   assigned_to?: string | null
   resolved_at?: string | null
   resolution_verification?: 'fixed' | 'still_a_problem' | 'merged' | null
-  ai_summary?: string | null
-  ai_summary_updated_at?: string | null
   created_at: string
   updated_at: string
   category: { name: string; icon: string; color: string } | null
