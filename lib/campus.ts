@@ -43,7 +43,6 @@ export type CampusIssue = {
   resolution_verification?: 'fixed' | 'still_a_problem' | 'merged' | null
   ai_summary?: string | null
   ai_summary_updated_at?: string | null
-  demoOnly?: boolean
   created_at: string
   updated_at: string
   category: { name: string; icon: string; color: string } | null

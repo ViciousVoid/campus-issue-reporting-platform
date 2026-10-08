@@ -14,7 +14,6 @@ import {
   CATEGORY_IMAGES, STATUS_LABELS, type AppView, type Campus, type CampusIssue,
   type Category, type IssueStatus,
 } from '@/lib/campus'
-import { createDemoIssues } from '@/lib/campus-demo'
 import { IssueCard } from '@/components/campus/issue-card'
 import { IssueDetail } from '@/components/campus/issue-detail'
 import { ReportDialog } from '@/components/campus/report-dialog'
@@ -114,8 +113,7 @@ export function CampusApp() {
     if (error) return null
     return data as { thresholds: unknown } | null
   })
-  const demoIssues = useMemo(() => createDemoIssues(campusId, categories), [campusId, categories])
-  const feedIssues = useMemo(() => [...issues, ...demoIssues].sort((a, b) => b.created_at.localeCompare(a.created_at)), [demoIssues, issues])
+  const feedIssues = useMemo(() => issues.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)), [issues])
   const thresholds: HeatThresholds = getHeatThresholds(heatSettings?.thresholds ?? DEFAULT_HEAT_THRESHOLDS)
   const isModerator = moderatorMembership?.role === 'moderator' || moderatorMembership?.role === 'admin'
   const isAdmin = moderatorMembership?.role === 'admin'
@@ -307,7 +305,7 @@ export function CampusApp() {
   const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : view === 'developer' ? 'Developer options' : 'Your profile'
   const mapCenterIssue = issues.find((issue) => issue.latitude != null && issue.longitude != null)
   const mapCenter = mapCenterIssue ? { latitude: mapCenterIssue.latitude!, longitude: mapCenterIssue.longitude! } : null
-  const mappedIssueCount = feedIssues.filter((issue) => !issue.demoOnly && issue.latitude != null && issue.longitude != null).length
+  const mappedIssueCount = feedIssues.filter((issue) => issue.latitude != null && issue.longitude != null).length
 
   return (
     <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}`}>

@@ -382,12 +382,7 @@
 .issue-card.issue-card-flame-purple-magenta::before { background-image: linear-gradient(115deg, #7b2cff 0%, #a83dff 28%, #ed40c7 52%, #c026d3 76%, #7b2cff 100%); background-size: 300% 300%; opacity: 1; animation: flame-border-flow 3s linear infinite; filter: drop-shadow(0 0 4px #a83dff) drop-shadow(0 0 9px #ed40c799); }
 .issue-card.issue-card-flame-ember { box-shadow: 0 0 14px #ffb52e35, 0 4px 18px #e6335320; }
 .issue-card.issue-card-flame-ember::before { background-image: linear-gradient(115deg, #fff079 0%, #ffb52e 28%, #ff7040 56%, #e63353 78%, #fff079 100%); background-size: 300% 300%; opacity: 1; animation: flame-border-flow 3s linear infinite; filter: drop-shadow(0 0 4px #ffad32) drop-shadow(0 0 9px #e6335388); }
-.trial-sample-tag { flex: 0 0 auto; margin-left: auto; padding: 4px 6px; border: 1px solid #cfd8e3; border-radius: 999px; color: #53677b; background: #f1f5f9; font-size: 7px; font-weight: 800; letter-spacing: .55px; white-space: nowrap; }
-.issue-card-demo .issue-card-head > .icon-button { display: none; }
-.issue-card-demo .issue-card-title,.issue-card-demo .issue-photo-wrap { cursor: default; }
-.issue-card-demo .issue-card-actions button:disabled { opacity: .72; cursor: not-allowed; }
 .campus-app.dark-theme .issue-card.issue-card-flame-purple-magenta,.campus-app.dark-theme .issue-card.issue-card-flame-ember { border-color: transparent; }
-.campus-app.dark-theme .trial-sample-tag { border-color: #574454; color: #ffc1d1; background: #30232f; }
 @keyframes flame-border-flow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
 @keyframes heat-flicker { from { opacity: .42; } to { opacity: .88; } }
 

@@ -65,7 +65,7 @@ function PinPicker({ selected, onSelect }: { selected: Coordinates | null; onSel
 }
 
 export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[]; onSelectIssue: (issueId: string) => void }) {
-  const located = useMemo(() => issues.filter((issue) => !issue.demoOnly && issue.latitude != null && issue.longitude != null), [issues])
+  const located = useMemo(() => issues.filter((issue) => issue.latitude != null && issue.longitude != null), [issues])
   const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
