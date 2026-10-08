@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type ChangeEvent } from 'react'
-import { Flame, ImagePlus, LoaderCircle } from 'lucide-react'
+import { ImagePlus, LoaderCircle } from 'lucide-react'
 
 type CampusHeroArtProps = {
   imageUrl: string | null
@@ -32,9 +32,6 @@ export function CampusHeroArt({ imageUrl, uploading, canEdit, onChooseFile, onRe
           <div className="art-tree tree-one" />
           <div className="art-tree tree-two" />
           <div className="art-path" />
-          <span className="art-spark spark-one">✳</span>
-          <span className="art-spark spark-two">✳</span>
-          <div className="art-note"><span><Flame size={14} fill="currentColor" /></span><strong>Good change<br />is contagious.</strong></div>
         </div>
       )}
       {imageUrl && <span className="welcome-art-vignette" aria-hidden="true" />}

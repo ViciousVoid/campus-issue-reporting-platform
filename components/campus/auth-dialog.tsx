@@ -56,10 +56,11 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
       <section className="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="icon-button auth-close" onClick={onClose} aria-label="Close sign in"><X size={20} /></button>
         <div className="auth-mark"><span className="brand-symbol"><span>c</span></span></div>
-        <span className="eyebrow">YOUR CAMPUS, YOUR VOICE</span>
-        <h2 id="auth-title">{mode === 'signin' ? 'Welcome back.' : 'Join your campus.'}</h2>
-        <p className="auth-subtitle">{mode === 'signin' ? 'Sign in to support reports and follow campus progress.' : 'Create an account to share what needs attention.'}</p>
-        {success ? <div className="auth-success"><CheckCircle2 size={21} /><strong>One last step</strong><p>{success}</p><button className="button-secondary" onClick={() => { setSuccess(''); setMode('signin') }}><ArrowLeft size={14} /> Back to sign in</button></div> : <form className="auth-form" onSubmit={submit}>
+                <span className="eyebrow">CAMPUSHEAT ACCOUNT</span>
+        <h2 id="auth-title">{mode === 'signin' ? 'Sign in' : 'Create account'}</h2>
+        <p className="auth-subtitle">{mode === 'signin' ? 'Sign in to vote and follow campus reports.' : 'Create an account to submit campus reports.'}</p>
+        {success ? <div className="auth-success"><CheckCircle2 size={21} /><strong>Check your email</strong><p>{success}</p>
+<button className="button-secondary" onClick={() => { setSuccess(''); setMode('signin') }}><ArrowLeft size={14} /> Back to sign in</button></div> : <form className="auth-form" onSubmit={submit}>
           {mode === 'signup' && <label className="form-field"><span>Your name</span><input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="How should we address you?" /></label>}
           <label className="form-field"><span>Email address</span><span className="input-with-icon"><Mail size={16} /><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" /></span></label>
           <label className="form-field"><span>Password</span><span className="input-with-icon"><LockKeyhole size={16} /><input autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></span></label>

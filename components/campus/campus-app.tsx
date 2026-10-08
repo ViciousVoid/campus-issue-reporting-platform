@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
-  CircleHelp, Clock3, Compass, Flame, Heart, ImagePlus, LoaderCircle, LogIn, MapPin,
-  Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, Wrench, X,
+  CircleHelp, Clock3, Compass, Flame, ImagePlus, LoaderCircle, LogIn, MapPin,
+  Moon, Plus, Search, Send, ShieldCheck, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -378,7 +378,7 @@ export function CampusApp() {
       <aside className="campus-sidebar" aria-label="Main navigation">
         <a className="brand-lockup" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}>
           <span className="brand-symbol"><Flame size={21} fill="currentColor" /></span>
-          <span><strong>campus<span className="brand-hot">heat</span></strong><small>Better campus, together</small></span>
+          <span><strong>campus<span className="brand-hot">heat</span></strong></span>
         </a>
         <div className="sidebar-campus-wrap">
           <span className="eyebrow">YOUR CAMPUS</span>
@@ -396,8 +396,8 @@ export function CampusApp() {
         </nav>
         <button className="theme-toggle sidebar-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}<span>{isDarkMode ? 'Light mode' : 'Dark mode'}</span></button>
         <button className="sidebar-report" onClick={openReport}><Plus size={18} /> Report an issue</button>
-        <div className="sidebar-bottom"><div className="sidebar-prompt"><span className="prompt-icon"><Sparkles size={17} /></span><strong>Small fixes. Big impact.</strong><span>See something that needs attention? Let your campus know.</span><button onClick={openReport}>Share a report <ArrowUp size={14} /></button></div>
-          <button className="user-mini" onClick={() => userId ? setView('profile') : setAuthOpen(true)}><span className="avatar avatar-small">{profile?.display_name?.slice(0, 1).toUpperCase() ?? <Users size={15} />}</span><span><strong>{profile?.display_name ?? 'Join your campus'}</strong><small>{userId ? 'Student account' : 'Sign in or create an account'}</small></span><ChevronDown size={15} /></button>
+        <div className="sidebar-bottom">
+          <button className="user-mini" onClick={() => userId ? setView('profile') : setAuthOpen(true)}><span className="avatar avatar-small">{profile?.display_name?.slice(0, 1).toUpperCase() ?? <Users size={15} />}</span><span><strong>{profile?.display_name ?? 'Sign in'}</strong><small>{userId ? 'Student account' : 'Sign in or create an account'}</small></span><ChevronDown size={15} /></button>
         </div>
       </aside>
 
@@ -422,20 +422,21 @@ export function CampusApp() {
           isAdmin ? <DeveloperTools key={campusId} campusId={campusId} /> : <section className="content-page"><PageHeading eyebrow="ADMIN-ONLY SANDBOX" title="Developer access required" description="These testing controls are restricted to campus administrators." /><EmptyState icon={ShieldCheck} title="This area is restricted" body="Switch to a campus where you have administrator access." /></section>
         ) : view === 'profile' ? (
           <section className="content-page profile-page">
-            <PageHeading eyebrow="YOUR CAMPUS FOOTPRINT" title={pageTitle} description="Every report is a step toward a better campus." />
-            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div><div className="section-title-row"><div><span className="eyebrow">YOUR CONTRIBUTIONS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="Your story starts here" body="Report a campus issue and help get it on the right people's radar." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}</>}
+          <PageHeading eyebrow="ACCOUNT OVERVIEW" title={pageTitle} description="View your account details and submitted reports." />
+          {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div><div className="section-title-row"><div><span className="eyebrow">YOUR REPORTS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="No reports yet" body="Reports you submit to this campus will appear here." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}</>}
+
           </section>
         ) : (
           <>
             <section className="welcome-panel">
-              <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> YOUR CAMPUS, YOUR VOICE</span><h1>A better campus<br />starts <em>with us.</em></h1><p>Spot something that needs fixing? Share it with your campus community and help make change happen.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
+              <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> CAMPUS ISSUE REPORTING</span><h1>Report a<br /><em>campus problem.</em></h1><p>Submit maintenance, safety, and other campus concerns for review.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
               <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(userId)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
             </section>
 
             <section ref={mapPanelRef} id="campus-map-panel" className="campus-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">CAMPUS MAP</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Use +/− or scroll over the map to zoom · drag to explore</span></div><CampusMap issues={feedIssues} center={mapCenter} focusedIssueId={mapFocusIssueId} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Map pins are approximate; open a report to review its location.</p></section>
 
             <section className="feed-content">
-              <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'FIND WHAT NEEDS ATTENTION' : 'HAPPENING AROUND YOU'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {feedIssues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and find an issue you can help move forward.' : 'Real issues. Real people. Real progress.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
+              <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'SEARCH AND FILTER REPORTS' : 'CAMPUS REPORTS'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {feedIssues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and filter by status or location.' : 'Recent reports and their current status.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
               <div className="feed-toolbar">
                 <div className="feed-tabs" role="tablist" aria-label="Feed type"><button role="tab" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'selected' : ''} onClick={() => setStatusFilter('all')}>For you</button><button role="tab" aria-selected={statusFilter === 'in_progress'} className={statusFilter === 'in_progress' ? 'selected' : ''} onClick={() => setStatusFilter('in_progress')}>In progress</button><button role="tab" aria-selected={statusFilter === 'resolved'} className={statusFilter === 'resolved' ? 'selected' : ''} onClick={() => setStatusFilter('resolved')}>Resolved</button></div>
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
@@ -446,7 +447,7 @@ export function CampusApp() {
               </div>
               <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{orderedCategories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
               {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all' || fireOnly ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all' || fireOnly ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all'); setLocationFilter('all'); setFireOnly(false) }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}
-              <div className="feed-footer"><span>Showing {filteredIssues.length} of {feedIssues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
+              <div className="feed-footer"><span>Showing {filteredIssues.length} of {feedIssues.length} reports</span></div>
             </section>
           </>
         )}
@@ -455,8 +456,8 @@ export function CampusApp() {
       <aside className="right-column" aria-label="Campus highlights">
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
         <section className="campus-card"><div className="campus-card-top"><span className="campus-card-icon"><Building2 size={17} /></span><span className="eyebrow">YOUR CAMPUS</span><button aria-label="Change campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)}><ChevronDown size={16} /></button></div><h2>{campus?.name ?? 'Campus community'}</h2><p><MapPin size={14} />{campus?.city ?? 'Choose your campus'}</p><div className="campus-stats"><div><strong>{issues.length}</strong><span>open reports</span></div><div><strong>{issues.filter((issue) => issue.status === 'resolved').length}</strong><span>resolved</span></div></div><button className="campus-card-link" onClick={() => setView('explore')}>Explore campus <ArrowUp size={14} /></button></section>
-        <div className="community-note"><ShieldCheck size={17} /><span><strong>Real people. Real progress.</strong><small>Keep it kind, constructive, and campus-focused.</small></span></div>
-        <footer className="right-footer"><span>© 2026 campusheat</span><span>Community first <Flame size={12} /></span></footer>
+        <div className="community-note"><ShieldCheck size={17} /><span><strong>Posting guidelines</strong><small>Keep discussions respectful and focused on campus issues.</small></span></div>
+        <footer className="right-footer"><span>© 2026 campusheat</span></footer>
       </aside>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
@@ -478,7 +479,7 @@ function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: 
 }
 
 function SignInPrompt({ onSignIn }: { onSignIn: () => void }) {
-  return <div className="sign-in-prompt"><span className="prompt-icon large"><Users size={20} /></span><h2>Your campus community is waiting.</h2><p>Sign in to see your contributions, follow updates, and stay connected.</p><button className="button-primary small" onClick={onSignIn}><LogIn size={15} /> Sign in or join</button></div>
+  return <div className="sign-in-prompt"><span className="prompt-icon large"><Users size={20} /></span><h2>Sign in to view your reports</h2><p>Your profile and submitted reports are available after you sign in.</p><button className="button-primary small" onClick={onSignIn}><LogIn size={15} /> Sign in</button></div>
 }
 
 export function EmptyState({ icon: Icon, title, body, action }: { icon: LucideIcon; title: string; body: string; action?: ReactNode }) {

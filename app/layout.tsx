@@ -3,12 +3,12 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'campusheat — Better campus, together',
-  description: 'Spot what needs attention, share it with your campus community, and help make change happen.',
+  title: 'campusheat — Campus issue reports',
+  description: 'View campus issue reports, track their status, and report maintenance, safety, and other campus concerns.',
   applicationName: 'campusheat',
   openGraph: {
-    title: 'campusheat — Better campus, together',
-    description: 'Real issues. Real people. Real progress.',
+    title: 'campusheat — Campus issue reports',
+    description: 'View and submit maintenance, safety, and other campus issue reports.',
     type: 'website',
   },
 }
