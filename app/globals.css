@@ -337,15 +337,20 @@
   .mobile-chat-page { min-height: calc(100dvh - 140px); display: flex; flex-direction: column; gap: 8px; }
   .mobile-chat-page .campus-chat { height: min(68dvh, 680px); min-height: 420px; flex: 0 0 auto; }
   .mobile-chat-page .campus-chat-height-control,.mobile-chat-page .campus-chat-expand { display: none; }
-  .mobile-chat-page .campus-chat-title strong { font-size: 15px; }
-  .mobile-chat-page .campus-chat-title span,.mobile-chat-page .campus-chat-community { font-size: 11px; }
-  .mobile-chat-page .campus-chat-messages { padding: 16px 13px; }
-  .mobile-chat-page .campus-chat-message-list { gap: 15px; }
+  .mobile-chat-page .campus-chat-header { min-height: 52px; padding: 8px 10px; gap: 8px; }
+  .mobile-chat-page .campus-chat-icon { width: 27px; height: 27px; border-radius: 8px; }
+  .mobile-chat-page .campus-chat-icon svg { width: 14px; height: 14px; }
+  .mobile-chat-page .campus-chat-title strong { font-size: 13px; }
+  .mobile-chat-page .campus-chat-title span,.mobile-chat-page .campus-chat-community { font-size: 10px; }
+  .mobile-chat-page .campus-chat-community { min-height: 32px; padding: 7px 10px; }
+  .mobile-chat-page .campus-chat-messages { padding: 14px 12px; }
+  .mobile-chat-page .campus-chat-message-list { gap: 13px; }
   .mobile-chat-page .campus-chat-bubble-content { font-size: 13px; }
-  .mobile-chat-page .campus-chat-composer { padding: 12px; }
-  .mobile-chat-page .campus-chat-composer textarea { min-height: 62px; font-size: 16px; }
-  .mobile-chat-page .campus-chat-composer-footer > span { font-size: 10px; }
-  .mobile-chat-page .campus-chat-attach,.mobile-chat-page .campus-chat-composer-footer .button-primary { width: 40px; min-height: 40px; }
+  .mobile-chat-page .campus-chat-composer { padding: 8px 10px; }
+  .mobile-chat-page .campus-chat-composer textarea { height: 44px; min-height: 44px; max-height: 96px; padding: 7px 9px; font-size: 16px; line-height: 1.4; }
+  .mobile-chat-page .campus-chat-composer-footer { padding-top: 5px; }
+  .mobile-chat-page .campus-chat-composer-footer > span { font-size: 9px; }
+  .mobile-chat-page .campus-chat-attach,.mobile-chat-page .campus-chat-composer-footer .button-primary { width: 34px; min-height: 34px; }
   .mobile-chat-page .campus-chat-empty,.mobile-chat-page .campus-chat-gate { font-size: 12px; }
   .mobile-chat-page .campus-chat-empty strong,.mobile-chat-page .campus-chat-gate strong { font-size: 14px; }
   .right-column.chat-view-hidden { display: none; }
