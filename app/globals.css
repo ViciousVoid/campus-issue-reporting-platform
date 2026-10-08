@@ -572,6 +572,15 @@ button.admin-stat-card { cursor: pointer; }
 .campus-app.dark-theme .developer-count-grid label > div { border-color: var(--border); background: #211d28; }
 .campus-app.dark-theme .developer-count-grid input { color: var(--ink); }
 .campus-app.dark-theme .developer-delete-button { border-color: #60313b; color: #ff9aa9; background: #2b2028; }
+.issue-admin-controls { display: grid; gap: 11px; padding: 12px; margin: 14px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+.issue-admin-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.issue-admin-heading strong { color: var(--ink); font-size: 10px; }
+.issue-admin-editor { display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid var(--border); }
+.issue-admin-editor .form-field { margin-bottom: 9px; }
+.issue-admin-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.issue-admin-delete { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.issue-admin-delete p { margin: 0; color: var(--muted-foreground); font-size: 9px; line-height: 1.5; }
+.issue-admin-delete-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 1120px) {
   .campus-map-panel .leaflet-campus-map,.campus-map-panel .map-loading { height: 350px; }
 }

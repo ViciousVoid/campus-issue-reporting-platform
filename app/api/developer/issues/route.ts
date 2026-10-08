@@ -7,6 +7,7 @@ const campusQuerySchema = z.string().uuid()
 const updateSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('set_vote_counts'), issueId: z.string().uuid(), upvotes: z.number().int().min(0).max(1_000_000), downvotes: z.number().int().min(0).max(1_000_000) }),
   z.object({ action: z.literal('reset_vote_counts'), issueId: z.string().uuid() }),
+  z.object({ action: z.literal('update_issue'), issueId: z.string().uuid(), title: z.string().trim().min(8).max(120), description: z.string().trim().min(20).max(5000) }),
   z.object({ action: z.literal('delete_issue'), issueId: z.string().uuid() }),
 ])
 
@@ -57,7 +58,19 @@ export async function POST(request: Request) {
     if (error) return Response.json({ error: 'The report could not be deleted.' }, { status: 500 })
     const paths = (media ?? []).map((item) => item.storage_path)
     const { error: storageError } = paths.length ? await admin.storage.from('issue-photos').remove(paths) : { error: null }
-    return Response.json({ ok: true, warning: storageError ? 'Report deleted, but photo files could not be removed.' : null })
+    return Response.json({ ok: true, warning: storageError ? 'Post deleted, but photo files could not be removed.' : null })
+  }
+
+  if (parsed.data.action === 'update_issue') {
+    const { data, error } = await admin.from('issues')
+      .update({ title: parsed.data.title, description: parsed.data.description, updated_at: new Date().toISOString() })
+      .eq('id', issue.id)
+      .eq('campus_id', issue.campus_id)
+      .select('id')
+      .maybeSingle()
+    if (error) return Response.json({ error: 'The post could not be updated.' }, { status: 500 })
+    if (!data) return Response.json({ error: 'Post not found.' }, { status: 404 })
+    return Response.json({ ok: true })
   }
 
   const counts = parsed.data.action === 'reset_vote_counts'
