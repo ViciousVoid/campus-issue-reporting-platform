@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { relativeTime } from '@/components/campus/issue-card'
 import { Bubble, BubbleContent } from '@/components/ui/bubble'
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageGroup, MessageHeader } from '@/components/ui/message'
-import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerViewport } from '@/components/ui/message-scroller'
+import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from '@/components/ui/message-scroller'
 
 type CampusChatMessage = {
   id: string
@@ -120,38 +120,40 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
         </div>
       ) : (
         <>
-          <MessageScroller className="campus-chat-scroller">
-            <MessageScrollerViewport className="campus-chat-messages">
-              <MessageScrollerContent className="campus-chat-message-list" role="log" aria-label="Campus chat messages" aria-live="polite">
-                {isLoading ? <div className="campus-chat-status"><LoaderCircle size={17} className="spin" />Loading campus messages…</div>
-                  : error ? <div className="campus-chat-status campus-chat-error">Chat messages could not be loaded. Please try again.</div>
-                    : messages.length === 0 ? <div className="campus-chat-empty"><span><MessageCircle size={19} /></span><strong>Start the conversation</strong><p>Share a helpful update, ask a question, or say hello.</p></div>
-                      : messages.map((message, index) => {
-                        const isOwnMessage = message.user_id === userId
-                        const displayName = message.author?.display_name || 'Campus student'
-                        return (
-                          <MessageScrollerItem key={message.id} scrollAnchor={index === messages.length - 1}>
-                            <MessageGroup className={`campus-chat-message${isOwnMessage ? ' own-message' : ''}`}>
-                              <Message align={isOwnMessage ? 'end' : 'start'}>
-                                {!isOwnMessage && <MessageAvatar className="avatar campus-chat-avatar" aria-hidden="true">{message.author?.avatar_url
-                                  ? <img src={message.author.avatar_url} alt="" />
-                                  : displayName.slice(0, 1).toUpperCase()}</MessageAvatar>}
-                                <MessageContent className="campus-chat-message-content">
-                                  {!isOwnMessage && <MessageHeader className="campus-chat-author">{displayName}</MessageHeader>}
-                                  <Bubble align={isOwnMessage ? 'end' : 'start'} variant={isOwnMessage ? 'tinted' : 'muted'} className="campus-chat-bubble">
-                                    <BubbleContent className="campus-chat-bubble-content">{message.body}</BubbleContent>
-                                  </Bubble>
-                                  <MessageFooter className="campus-chat-time"><time dateTime={message.created_at}>{relativeTime(message.created_at)}</time></MessageFooter>
-                                </MessageContent>
-                              </Message>
-                            </MessageGroup>
-                          </MessageScrollerItem>
-                        )
-                      })}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton direction="end" className="campus-chat-scroll-bottom" />
-          </MessageScroller>
+          <MessageScrollerProvider>
+            <MessageScroller className="campus-chat-scroller">
+              <MessageScrollerViewport className="campus-chat-messages">
+                <MessageScrollerContent className="campus-chat-message-list" role="log" aria-label="Campus chat messages" aria-live="polite">
+                  {isLoading ? <div className="campus-chat-status"><LoaderCircle size={17} className="spin" />Loading campus messages…</div>
+                    : error ? <div className="campus-chat-status campus-chat-error">Chat messages could not be loaded. Please try again.</div>
+                      : messages.length === 0 ? <div className="campus-chat-empty"><span><MessageCircle size={19} /></span><strong>Start the conversation</strong><p>Share a helpful update, ask a question, or say hello.</p></div>
+                        : messages.map((message, index) => {
+                          const isOwnMessage = message.user_id === userId
+                          const displayName = message.author?.display_name || 'Campus student'
+                          return (
+                            <MessageScrollerItem key={message.id} scrollAnchor={index === messages.length - 1}>
+                              <MessageGroup className={`campus-chat-message${isOwnMessage ? ' own-message' : ''}`}>
+                                <Message align={isOwnMessage ? 'end' : 'start'}>
+                                  {!isOwnMessage && <MessageAvatar className="avatar campus-chat-avatar" aria-hidden="true">{message.author?.avatar_url
+                                    ? <img src={message.author.avatar_url} alt="" />
+                                    : displayName.slice(0, 1).toUpperCase()}</MessageAvatar>}
+                                  <MessageContent className="campus-chat-message-content">
+                                    {!isOwnMessage && <MessageHeader className="campus-chat-author">{displayName}</MessageHeader>}
+                                    <Bubble align={isOwnMessage ? 'end' : 'start'} variant={isOwnMessage ? 'tinted' : 'muted'} className="campus-chat-bubble">
+                                      <BubbleContent className="campus-chat-bubble-content">{message.body}</BubbleContent>
+                                    </Bubble>
+                                    <MessageFooter className="campus-chat-time"><time dateTime={message.created_at}>{relativeTime(message.created_at)}</time></MessageFooter>
+                                  </MessageContent>
+                                </Message>
+                              </MessageGroup>
+                            </MessageScrollerItem>
+                          )
+                        })}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton direction="end" className="campus-chat-scroll-bottom" />
+            </MessageScroller>
+          </MessageScrollerProvider>
 
           <form className="campus-chat-composer" onSubmit={(event) => void sendMessage(event)}>
             {sendError && <p className="campus-chat-error" role="alert">{sendError}</p>}
