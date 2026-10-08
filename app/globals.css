@@ -740,8 +740,9 @@ button.admin-stat-card { cursor: pointer; }
 .campus-map-popup > span { font-size: 10px; text-transform: capitalize; }
 .campus-map-popup button { justify-self: start; padding: 0; border: 0; color: #d95739; background: transparent; font: 700 10px var(--sans); cursor: pointer; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 7px 11px; margin-top: 10px; color: var(--muted-foreground); font-size: 8px; }
-.map-legend span { display: inline-flex; align-items: center; gap: 4px; }
-.map-legend i { width: 7px; height: 7px; border-radius: 50%; }
+  .map-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .campus-map-panel > div.map-legend:nth-of-type(3) { font-size: 10px; }
+  .map-legend i { width: 7px; height: 7px; border-radius: 50%; }
   .severity-low { background: #3b9b67; }.severity-medium { background: #d6a21f; }.severity-high { background: #ed7140; }.severity-critical { background: #c33b46; }
   .vote-heat-ember { background: linear-gradient(135deg,#fff079 0%,#ffb52e 28%,#ff7040 56%,#e63353 78%,#fff079 100%); }
   .vote-heat-purple { background: linear-gradient(135deg,#7b2cff 0%,#a83dff 28%,#ed40c7 52%,#c026d3 76%,#7b2cff 100%); }
