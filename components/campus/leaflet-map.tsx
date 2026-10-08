@@ -99,7 +99,7 @@ export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[
 
   return (
     <div className="campus-map-frame">
-    <MapContainer className="leaflet-campus-map" center={currentLocation ? [currentLocation.latitude, currentLocation.longitude] : DEFAULT_CENTER} zoom={currentLocation ? 16 : 5} scrollWheelZoom={false} zoomControl>
+    <MapContainer className="leaflet-campus-map" center={currentLocation ? [currentLocation.latitude, currentLocation.longitude] : DEFAULT_CENTER} zoom={currentLocation ? 16 : 5} scrollWheelZoom zoomControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <MapSizeWatcher />
       {currentLocation && <RecenterMap center={currentLocation} />}
