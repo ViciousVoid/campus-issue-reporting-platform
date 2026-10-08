@@ -15,7 +15,9 @@ async function getAuthorizedAdmin() {
   const sessionClient = await createClient()
   const { data: authData, error: authError } = await sessionClient.auth.getUser()
   if (authError || !authData.user) return { response: Response.json({ error: 'Sign in required.' }, { status: 401 }) }
-  return { userId: authData.user.id }
+  const { data: profile, error: profileError } = await sessionClient.from('profiles').select('campus_id').eq('id', authData.user.id).maybeSingle()
+  if (profileError || !profile?.campus_id) return { response: Response.json({ error: 'A campus membership is required.' }, { status: 403 }) }
+  return { userId: authData.user.id, campusId: profile.campus_id }
 }
 
 async function hasCampusAdminRole(userId: string, campusId: string) {
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
   if ('response' in auth) return auth.response
   const campusId = campusQuerySchema.safeParse(new URL(request.url).searchParams.get('campusId'))
   if (!campusId.success) return Response.json({ error: 'A valid campus is required.' }, { status: 400 })
+  if (campusId.data !== auth.campusId) return Response.json({ error: 'Developer tools are restricted to your own campus.' }, { status: 403 })
   if (!await hasCampusAdminRole(auth.userId, campusId.data)) return Response.json({ error: 'Developer tools are restricted to campus administrators.' }, { status: 403 })
 
   const admin = createAdminClient()
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient()
   const { data: issue } = await admin.from('issues').select('id,campus_id').eq('id', parsed.data.issueId).maybeSingle()
-  if (!issue) return Response.json({ error: 'Report not found.' }, { status: 404 })
+  if (!issue || issue.campus_id !== auth.campusId) return Response.json({ error: 'Report not found.' }, { status: 404 })
   if (!await hasCampusAdminRole(auth.userId, issue.campus_id)) return Response.json({ error: 'Developer tools are restricted to campus administrators.' }, { status: 403 })
 
   if (parsed.data.action === 'delete_issue') {

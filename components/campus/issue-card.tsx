@@ -1,5 +1,6 @@
 'use client'
 
+import useSWR from 'swr'
 import { ArrowDown, ArrowUp, Camera, Flame, MapPin, MessageCircle } from 'lucide-react'
 import { CATEGORY_IMAGES, getDisplayedVoteCounts, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { getHeatLevel, getIssueRecurrenceCount, HEAT_LABELS, scoreIssueHeat, type HeatLevel, type HeatThresholds } from '@/lib/campus-heat'
@@ -21,11 +22,19 @@ export const statusStyles: Record<string, string> = {
 
 const supabase = createClient()
 
+function useIssuePhotoUrl(path: string | undefined) {
+  const { data } = useSWR(path ? ['private-issue-photo', path] : null, async ([, filePath]) => {
+    const { data, error } = await supabase.storage.from('issue-photos').createSignedUrl(filePath, 60 * 60)
+    if (error) throw error
+    return data.signedUrl
+  })
+  return data ?? null
+}
+
 export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen, onShowOnMap, onVote, onAuth }: IssueCardProps) {
   const photos = issue.media?.slice().sort((a, b) => a.display_order - b.display_order) ?? []
-  const photo = photos[0]
-    ? supabase.storage.from('issue-photos').getPublicUrl(photos[0].storage_path).data.publicUrl
-    : `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
+  const photoUrl = useIssuePhotoUrl(photos[0]?.storage_path)
+  const photo = photoUrl ?? `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
   const { upvotes: upVotes, downvotes: downVotes } = getDisplayedVoteCounts(issue)
   const heatScore = scoreIssueHeat(issue, getIssueRecurrenceCount(issue, issues))
   const heatLevel: HeatLevel = getHeatLevel(heatScore, thresholds)
@@ -71,7 +80,7 @@ export function relativeTime(value: string) {
 export function IssueImage({ issue, className = '' }: { issue: CampusIssue; className?: string }) {
   const path = issue.media?.slice().sort((a, b) => a.display_order - b.display_order)[0]?.storage_path
   const category = issue.custom_category || issue.category?.name || 'Campus'
-  const photo = path ? supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl : `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
+  const photo = useIssuePhotoUrl(path) ?? `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
   return <img className={className} src={photo} alt={`${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}`} />
 }
 

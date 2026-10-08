@@ -1,17 +1,18 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
-  CircleHelp, Clock3, Compass, Flame, ImagePlus, LoaderCircle, LogIn, MapPin, MessageCircle,
+  CircleHelp, Clock3, Compass, Flame, ImagePlus, LoaderCircle, LockKeyhole, LogIn, MapPin, MessageCircle,
   Moon, Plus, Search, Send, ShieldCheck, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import {
-  CATEGORY_IMAGES, STATUS_LABELS, type AppView, type Campus, type CampusIssue,
+  STATUS_LABELS, type AppView, type Campus, type CampusIssue,
   type Category, type IssueStatus,
 } from '@/lib/campus'
 import { IssueCard } from '@/components/campus/issue-card'
@@ -31,15 +32,24 @@ const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,departmen
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
 type CampusLocation = { id: string; name: string; building: string | null }
+type CampusDetails = Campus & {
+  is_public: boolean
+  signup_enabled: boolean
+  logo_label: string
+  brand_color: string
+  brand_dark_color: string
+  banner_url: string | null
+}
+type CampusAnnouncement = { id: string; title: string; body: string; created_at: string }
 
-async function loadCampuses(): Promise<Campus[]> {
-  const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug').order('name')
+async function loadCampuses(): Promise<CampusDetails[]> {
+  const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug,is_public,signup_enabled,logo_label,brand_color,brand_dark_color,banner_url').order('name')
   if (error) throw error
-  return (data ?? []) as Campus[]
+  return (data ?? []) as CampusDetails[]
 }
 
-async function loadCategories(): Promise<Category[]> {
-  const { data, error } = await supabase.from('categories').select('id,name,icon,color').order('name')
+async function loadCategories(campusId: string): Promise<Category[]> {
+  const { data, error } = await supabase.from('categories').select('id,name,icon,color').eq('campus_id', campusId).order('name')
   if (error) throw error
   return (data ?? []) as Category[]
 }
@@ -73,7 +83,8 @@ const mobileNavItems: { id: AppView; label: string; icon: LucideIcon }[] = [
   { id: 'profile', label: 'Profile', icon: Users },
 ]
 
-export function CampusApp() {
+export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } = {}) {
+  const router = useRouter()
   const [view, setView] = useState<AppView>('home')
   const [campusId, setCampusId] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
@@ -99,15 +110,21 @@ export function CampusApp() {
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(false)
 
+  const canLoadCampusData = !userId || profile?.campus_id === campusId
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
-  const { data: categories = [] } = useSWR('categories', loadCategories)
-  const { data: campusHeroImagePath } = useSWR(campusId ? ['campus-hero-image', campusId] : null, async ([, id]) => {
+  const { data: categories = [] } = useSWR(campusId && canLoadCampusData ? ['categories', campusId] : null, ([, id]) => loadCategories(id))
+  const { data: announcements = [] } = useSWR(campusId ? ['campus-announcements', campusId] : null, async ([, id]) => {
+    const { data, error } = await supabase.from('campus_announcements').select('id,title,body,created_at').eq('campus_id', id).eq('is_published', true).order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as CampusAnnouncement[]
+  })
+  const { data: campusHeroImagePath } = useSWR(campusId && canLoadCampusData ? ['campus-hero-image', campusId] : null, async ([, id]) => {
     const { data, error } = await supabase.from('campus_hero_images').select('storage_path').eq('campus_id', id).maybeSingle()
     if (error) throw error
     return data?.storage_path ?? null
   })
-  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId ? ['issues', campusId] : null, ([, id]) => loadIssues(id))
-  const { data: userIssues = [] } = useSWR(userId && campusId ? ['my-issues', userId, campusId] : null, async ([, uid, cid]) => {
+  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId && canLoadCampusData ? ['issues', campusId] : null, ([, id]) => loadIssues(id))
+  const { data: userIssues = [] } = useSWR(userId && campusId && canLoadCampusData ? ['my-issues', userId, campusId] : null, async ([, uid, cid]) => {
     const { data, error } = await supabase.from('issues').select(ISSUE_SELECT).eq('reporter_id', uid).eq('campus_id', cid).order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []) as unknown as CampusIssue[]
@@ -117,22 +134,22 @@ export function CampusApp() {
     if (error) throw error
     return (data ?? []) as ActivityItem[]
   })
-  const { data: locations = [] } = useSWR(campusId ? ['locations', campusId] : null, async ([, cid]) => {
+  const { data: locations = [] } = useSWR(campusId && canLoadCampusData ? ['locations', campusId] : null, async ([, cid]) => {
     const { data, error } = await supabase.from('locations').select('id,name,building').eq('campus_id', cid).order('name')
     if (error) throw error
     return (data ?? []) as CampusLocation[]
   })
-  const { data: departments = [] } = useSWR(campusId ? ['departments', campusId] : null, async ([, cid]) => {
+  const { data: departments = [] } = useSWR(campusId && canLoadCampusData ? ['departments', campusId] : null, async ([, cid]) => {
     const { data, error } = await supabase.from('departments').select('id,name').eq('campus_id', cid).order('name')
     if (error) throw error
     return data ?? []
   })
-  const { data: moderatorMembership } = useSWR(userId && campusId ? ['campus-moderator', userId, campusId] : null, async ([, uid, cid]) => {
+  const { data: moderatorMembership } = useSWR(userId && campusId && canLoadCampusData ? ['campus-moderator', userId, campusId] : null, async ([, uid, cid]) => {
     const { data, error } = await supabase.from('campus_moderators').select('role').eq('user_id', uid).eq('campus_id', cid).maybeSingle()
     if (error) return null
     return data as { role: string } | null
   })
-  const { data: heatSettings } = useSWR(campusId ? ['issue-heat-settings', campusId] : null, async ([, cid]) => {
+  const { data: heatSettings } = useSWR(campusId && canLoadCampusData ? ['issue-heat-settings', campusId] : null, async ([, cid]) => {
     const { data, error } = await supabase.from('issue_heat_settings').select('thresholds').eq('campus_id', cid).maybeSingle()
     if (error) return null
     return data as { thresholds: unknown } | null
@@ -168,7 +185,7 @@ export function CampusApp() {
       if (!active) return
       if (row) {
         setProfile(row as Profile)
-        if (row.campus_id) setCampusId(row.campus_id)
+        if (row.campus_id && !initialCampusSlug) setCampusId(row.campus_id)
       }
     })
     const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
@@ -179,13 +196,27 @@ export function CampusApp() {
   }, [])
 
   useEffect(() => {
-    if (!campusId && campuses.length) {
-      setCampusId(campuses.find((item) => item.slug === 'sgsits-indore')?.id ?? campuses[0].id)
-    }
-  }, [campusId, campuses])
+    if (!campuses.length) return
+    const requestedCampus = initialCampusSlug
+      ? campuses.find((item) => item.slug === initialCampusSlug)
+      : profile?.campus_id
+        ? campuses.find((item) => item.id === profile.campus_id)
+        : campuses.find((item) => item.slug === 'sgsits-indore') ?? campuses[0]
+    if (requestedCampus && campusId !== requestedCampus.id) setCampusId(requestedCampus.id)
+  }, [campusId, campuses, initialCampusSlug, profile?.campus_id])
 
-  const campus = campuses.find((item) => item.id === campusId) ?? campuses[0]
-  const campusHeroImageUrl = campusHeroImagePath ? supabase.storage.from('campus-assets').getPublicUrl(campusHeroImagePath).data.publicUrl : null
+  const campus = campuses.find((item) => item.id === campusId)
+  const campusAccessDenied = Boolean(campusId && ((userId && !canLoadCampusData) || (!campus?.is_public && !profile?.campus_id)))
+  const campusStyle = {
+    '--accent': campus?.brand_color ?? '#ed6747',
+    '--accent-dark': campus?.brand_dark_color ?? '#d95739',
+    '--primary': campus?.brand_color ?? '#ee6848',
+    '--ring': campus?.brand_color ?? '#ee6848',
+    '--accent-gradient': `linear-gradient(115deg, ${campus?.brand_color ?? '#ee6848'} 0%, ${campus?.brand_dark_color ?? '#d95739'} 100%)`,
+  } as CSSProperties
+  const campusHeroImageUrl = campusHeroImagePath
+    ? supabase.storage.from('campus-assets').getPublicUrl(campusHeroImagePath).data.publicUrl
+    : campus?.banner_url ?? null
   const selectedIssue = issues.find((issue) => issue.id === selectedIssueId) ?? userIssues.find((issue) => issue.id === selectedIssueId) ?? null
   const orderedCategories = useMemo(() => categories.slice().sort((a, b) => {
     const priority = (name: string) => name.toLowerCase() === 'classroom' ? 0 : name.toLowerCase() === 'hostel' ? 1 : 2
@@ -312,19 +343,15 @@ export function CampusApp() {
     }
   }
 
-  async function handleCampusChange(nextCampusId: string) {
-    setCampusId(nextCampusId)
+  function handleCampusChange(nextCampusId: string) {
+    const nextCampus = campuses.find((item) => item.id === nextCampusId)
+    if (!nextCampus) return
     setMapFocusIssueId(null)
     setMapScrollIssueId(null)
     setLocationFilter('all')
     setFireOnly(false)
     setCampusMenuOpen(false)
-    setNotice('Campus feed updated')
-    if (userId) {
-      const { data, error } = await supabase.from('profiles').update({ campus_id: nextCampusId }).eq('id', userId).select('id,display_name,avatar_url,campus_id').maybeSingle()
-      if (!error && data) setProfile(data as Profile)
-    }
-    window.setTimeout(() => setNotice(''), 2600)
+    router.push(`/c/${nextCampus.slug}`)
   }
 
   async function castVote(issue: CampusIssue, value: 1 | -1) {
@@ -397,7 +424,7 @@ export function CampusApp() {
   const mappedIssueCount = feedIssues.filter((issue) => issue.latitude != null && issue.longitude != null).length
 
   return (
-    <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}${chatExpanded ? ' chat-expanded' : ''}`}>
+    <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}${chatExpanded ? ' chat-expanded' : ''}${campusAccessDenied ? ' campus-locked' : ''}`} style={campusStyle}>
       <aside className="campus-sidebar" aria-label="Main navigation">
         <a className="brand-lockup" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}>
           <span className="brand-symbol"><Flame size={21} fill="currentColor" /></span>
@@ -406,11 +433,11 @@ export function CampusApp() {
         <div className="sidebar-campus-wrap">
           <span className="eyebrow">YOUR CAMPUS</span>
           <button className="campus-switcher" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-expanded={campusMenuOpen}>
-            <span className="campus-switcher-icon"><Building2 size={17} /></span>
+            <span className="campus-switcher-icon" style={campus ? { backgroundColor: campus.brand_color, color: '#fff' } : undefined} aria-hidden="true">{campus?.logo_label ?? <Building2 size={17} />}</span>
             <span className="campus-switcher-copy"><strong>{campus?.name ?? 'Choose your campus'}</strong><small>{campus?.city ?? 'Select a campus'}</small></span>
             <ChevronDown size={16} />
           </button>
-          {campusMenuOpen && <div className="campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => void handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}</small></button>)}</div>}
+          {campusMenuOpen && <div className="campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}{item.signup_enabled ? '' : ' · Preview'}</small></button>)}</div>}
           {campusError && <p className="inline-error">Campuses could not be loaded.</p>}
         </div>
         <nav className="side-links" aria-label="Main">
@@ -431,10 +458,24 @@ export function CampusApp() {
           {isAdmin && <button className="icon-button mobile-dev-button" onClick={() => setView('developer')} aria-label="Developer options"><Wrench size={18} /></button>}
           <button className="icon-button mobile-notifications" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Notifications"><Bell size={19} /></button>
           <button className="icon-button mobile-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
-          {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => void handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}</small></button>)}</div>}
+          {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}{item.signup_enabled ? '' : ' · Preview'}</small></button>)}</div>}
         </header>
 
-        {view === 'chat' ? (
+        {campusAccessDenied ? (
+          <section className="content-page campus-preview-page">
+            <PageHeading eyebrow="PRIVATE CAMPUS PREVIEW" title={campus?.name ?? 'Campus preview'} description={`${campus?.city ?? 'Campus'} · student access is not enabled for this demo space.`} />
+            <div className="campus-preview-card">
+              {campusHeroImageUrl ? <img className="campus-preview-image" src={campusHeroImageUrl} alt="" /> : <div className="campus-preview-image campus-preview-image-fallback" aria-hidden="true" />}
+              <div className="campus-preview-copy">
+                <span className="campus-preview-lock"><LockKeyhole size={16} /> PRIVATE CAMPUS</span>
+                <h2>{campus?.name}</h2>
+                <p>This campus is shown for the hackathon preview. Student accounts, reports, comments, chat, and photos stay restricted to their own campus.</p>
+                <button className="button-primary small" type="button" onClick={() => { const publicCampus = campuses.find((item) => item.slug === 'sgsits-indore'); if (publicCampus) handleCampusChange(publicCampus.id) }}>Go to SGSITS Indore</button>
+              </div>
+            </div>
+            <CampusAnnouncements announcements={announcements} />
+          </section>
+        ) : view === 'chat' ? (
           <section className="content-page mobile-chat-page">
             <PageHeading eyebrow="CAMPUS COMMUNITY" title="Campus chat" description={`Join the conversation with people at ${campus?.name ?? 'your campus'}.`} />
             <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={false} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded(false)} onRequireAuth={() => setAuthOpen(true)} />
@@ -458,8 +499,9 @@ export function CampusApp() {
           <>
             <section className="welcome-panel">
               <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> CAMPUS ISSUE REPORTING</span><h1>Report a<br /><em>campus problem.</em></h1><p>Submit maintenance, safety, and other campus concerns for review.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
-              <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(userId)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
+              <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(userId && canLoadCampusData)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
             </section>
+            <CampusAnnouncements announcements={announcements} />
 
             <section ref={mapPanelRef} id="campus-map-panel" className="campus-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">CAMPUS MAP</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Use +/− or scroll over the map to zoom · drag to explore</span></div><CampusMap issues={feedIssues} center={mapCenter} focusedIssueId={mapFocusIssueId} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Map pins are approximate; open a report to review its location.</p></section>
 
@@ -481,16 +523,16 @@ export function CampusApp() {
         )}
       </main>
 
-      <aside className={`right-column${view === 'chat' ? ' chat-view-hidden' : ''}`} aria-label="Campus chat and account" style={{ height: `${chatHeight}vh` }}>
+      <aside className={`right-column${view === 'chat' || campusAccessDenied ? ' chat-view-hidden' : ''}`} aria-label="Campus chat and account" style={{ height: `${chatHeight}vh` }}>
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
-        {view !== 'chat' && <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />}
+        {view !== 'chat' && !campusAccessDenied && <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />}
       </aside>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">{mobileNavItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'activity' && !userId ? setAuthOpen(true) : setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{mobileNavItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} aria-current={view === id ? 'page' : undefined} onClick={() => id === 'chat' ? setView(id) : userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
 
       {notice && <div className="toast-message" role="status">{notice}</div>}
       {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} initialMapCenter={mapCenter} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
-      {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) { setProfile(data as Profile); if (data.campus_id) setCampusId(data.campus_id) } else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
+      {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) { setProfile(data as Profile); if (data.campus_id) { setCampusId(data.campus_id); const ownCampus = campuses.find((item) => item.id === data.campus_id); if (ownCampus && initialCampusSlug !== ownCampus.slug) router.replace(`/c/${ownCampus.slug}`) } } else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
       {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onShowOnMap={showIssueOnMap} onPhotosChanged={refreshIssues} onVote={castVote} onComment={addComment} busy={busy} isModerator={isModerator} isAdmin={isAdmin} onAdminChange={async (deleted, message) => { await refreshIssues(); if (deleted) setSelectedIssueId(null); setNotice(message ?? (deleted ? 'Post deleted.' : 'Post updated.')); window.setTimeout(() => setNotice(''), 3000) }} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )
@@ -504,6 +546,11 @@ function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: 
   return <div className="page-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>
 }
 
+function CampusAnnouncements({ announcements }: { announcements: CampusAnnouncement[] }) {
+  if (!announcements.length) return null
+  return <aside className="campus-announcements" aria-label="Campus announcements"><span className="eyebrow">CAMPUS ANNOUNCEMENTS</span><div>{announcements.map((announcement) => <article key={announcement.id}><strong>{announcement.title}</strong><p>{announcement.body}</p></article>)}</div></aside>
+}
+
 function SignInPrompt({ onSignIn }: { onSignIn: () => void }) {
   return <div className="sign-in-prompt"><span className="prompt-icon large"><Users size={20} /></span><h2>Sign in to view your reports</h2><p>Your profile and submitted reports are available after you sign in.</p><button className="button-primary small" onClick={onSignIn}><LogIn size={15} /> Sign in</button></div>
 }
@@ -514,13 +561,6 @@ export function EmptyState({ icon: Icon, title, body, action }: { icon: LucideIc
 
 function LoadingState() {
   return <div className="loading-state" aria-label="Loading issues"><LoaderCircle size={22} className="spin" /><span>Finding the campus pulse…</span></div>
-}
-
-export function getIssueImage(issue: CampusIssue) {
-  const path = issue.media?.slice().sort((a, b) => a.display_order - b.display_order)[0]?.storage_path
-  if (path) return supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
-  const photo = CATEGORY_IMAGES[issue.category?.name ?? 'Other'] ?? CATEGORY_IMAGES.Other
-  return `https://images.unsplash.com/${photo}?auto=format&fit=crop&w=1000&q=82`
 }
 
 export { STATUS_LABELS, timeAgo }

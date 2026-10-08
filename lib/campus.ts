@@ -4,6 +4,12 @@ export type Campus = {
   city: string
   region: string
   slug: string
+  is_public?: boolean
+  signup_enabled?: boolean
+  logo_label?: string
+  brand_color?: string
+  brand_dark_color?: string
+  banner_url?: string | null
 }
 
 export type Category = {

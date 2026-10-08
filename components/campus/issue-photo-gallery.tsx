@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
+import useSWR from 'swr'
 import { Camera, ImagePlus, LoaderCircle } from 'lucide-react'
 import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { statusStyles } from '@/components/campus/issue-card'
@@ -37,9 +38,20 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
   const visiblePhotos = activePhotoSource === 'community' ? communityPhotos : postPhotos
   const selectedPhoto = visiblePhotos.find((photo) => photo.storage_path === selectedPath) ?? visiblePhotos[0]
   const selectedPhotoIndex = selectedPhoto ? visiblePhotos.findIndex((photo) => photo.storage_path === selectedPhoto.storage_path) : 0
+  const photoPathKey = photos.map((photo) => photo.storage_path).join('|')
+  const { data: photoUrls = {} } = useSWR(photoPathKey ? ['issue-photo-gallery', issue.id, photoPathKey] : null, async () => {
+    const signedPaths = await Promise.all(photos.map(async (photo) => {
+      const { data } = await supabase.storage.from('issue-photos').createSignedUrl(photo.storage_path, 60 * 60)
+      return [photo.storage_path, data?.signedUrl ?? null] as const
+    }))
+    return signedPaths.reduce<Record<string, string>>((result, [path, url]) => {
+      if (url) result[path] = url
+      return result
+    }, {})
+  })
   const category = issue.custom_category || issue.category?.name || 'Campus'
   const imageUrl = selectedPhoto
-    ? supabase.storage.from('issue-photos').getPublicUrl(selectedPhoto.storage_path).data.publicUrl
+    ? photoUrls[selectedPhoto.storage_path] ?? `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
     : `https://images.unsplash.com/${CATEGORY_IMAGES[category] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=1200&q=82`
   const canAddPhotos = issue.moderation_status === 'approved' || Boolean(userId && issue.reporter_id === userId)
   const remainingSlots = Math.max(0, MAX_PHOTOS - photos.length)
@@ -113,7 +125,7 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
       {communityPhotos.length > 0 && <p className="photo-source-caption">Community photos were added by students other than the original reporter.</p>}
       {lightboxOpen && <PhotoLightbox
         photos={visiblePhotos.length ? visiblePhotos.map((photo) => ({
-          src: supabase.storage.from('issue-photos').getPublicUrl(photo.storage_path).data.publicUrl,
+          src: photoUrls[photo.storage_path] ?? imageUrl,
           alt: `${activePhotoSource === 'community' ? 'Community-contributed' : 'Original post'} photo for ${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}`,
         })) : [{ src: imageUrl, alt: `${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}` }]}
         initialIndex={selectedPhotoIndex}
@@ -123,7 +135,7 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
       {visiblePhotos.length > 1 && (
         <div className="photo-thumbnail-list" role="group" aria-label={`Select a ${activePhotoSource === 'community' ? 'community' : 'post'} photo`}>
           {visiblePhotos.map((photo, index) => {
-            const thumbnailUrl = supabase.storage.from('issue-photos').getPublicUrl(photo.storage_path).data.publicUrl
+            const thumbnailUrl = photoUrls[photo.storage_path] ?? imageUrl
             const isSelected = selectedPhoto?.storage_path === photo.storage_path
             return (
               <button

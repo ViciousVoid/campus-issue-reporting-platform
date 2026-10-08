@@ -48,11 +48,13 @@ function jsonError(message: string, status = 403) {
 
 const MODEL = 'google/gemini-3.1-flash-lite'
 
-async function getSignedInUser() {
+async function getSignedInContext() {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) return null
-  return data.user
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('campus_id').eq('id', data.user.id).maybeSingle()
+  if (profileError || !profile?.campus_id) return null
+  return { user: data.user, campusId: profile.campus_id }
 }
 
 function tokenize(value: string) {
@@ -71,7 +73,7 @@ function lexicalScore(left: string, right: string) {
 async function analyzeIssue(title: string, description: string, campusId: string) {
   const admin = createAdminClient()
   const [{ data: categories }, { data: departments }, { data: candidates }] = await Promise.all([
-    admin.from('categories').select('id,name').order('name'),
+    admin.from('categories').select('id,name').eq('campus_id', campusId).order('name'),
     admin.from('departments').select('id,name').eq('campus_id', campusId).order('name'),
     admin.from('issues').select('id,title,description,category_id,location_id,created_at').eq('campus_id', campusId).eq('moderation_status', 'approved').order('created_at', { ascending: false }).limit(40),
   ])
@@ -93,8 +95,9 @@ async function analyzeIssue(title: string, description: string, campusId: string
 }
 
 export async function POST(request: Request) {
-  const user = await getSignedInUser()
-  if (!user) return Response.json({ error: 'Sign in to use issue intelligence.' }, { status: 401 })
+  const context = await getSignedInContext()
+  if (!context) return Response.json({ error: 'Sign in with a campus account to use issue intelligence.' }, { status: 401 })
+  const { user, campusId } = context
 
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'The request is incomplete or invalid.' }, { status: 400 })
@@ -102,6 +105,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
 
   if (input.action === 'update_heat_settings') {
+    if (input.campusId !== campusId) return jsonError('Campus settings are restricted to your own campus.')
     const role = await requireCampusModerator(user.id, input.campusId)
     if (role !== 'admin') return jsonError('Only campus admins can change heat thresholds.')
     const { hot, very_hot, critical, priority } = input.thresholds
@@ -113,7 +117,7 @@ export async function POST(request: Request) {
 
   if (input.action === 'set_status' || input.action === 'moderate_issue' || input.action === 'official_response' || input.action === 'verify_resolution' || input.action === 'merge_duplicate') {
     const { data: issue } = await admin.from('issues').select('id,campus_id,status,moderation_status,reporter_id,created_at,resolved_at').eq('id', input.issueId).maybeSingle()
-    if (!issue) return jsonError('Issue not found.', 404)
+    if (!issue || issue.campus_id !== campusId) return jsonError('Issue not found.', 404)
 
     if (input.action === 'verify_resolution') {
       if (issue.moderation_status !== 'approved' || !['resolved', 'reopened'].includes(issue.status)) return jsonError('Only resolved issues can be verified.', 409)
@@ -181,6 +185,7 @@ export async function POST(request: Request) {
   }
 
   if (input.action === 'suggest') {
+    if (input.campusId !== campusId) return jsonError('Suggestions are restricted to your own campus.')
     const { data: campus } = await admin.from('campuses').select('id').eq('id', input.campusId).maybeSingle()
     if (!campus) return Response.json({ error: 'Choose a valid campus.' }, { status: 400 })
     try {
@@ -207,7 +212,7 @@ export async function POST(request: Request) {
   }
 
   const { data: issue } = await admin.from('issues').select('id,campus_id,title,description,created_at,status,moderation_status,severity,updated_at,duplicate_of,category_id,location_id,department_id,custom_category,custom_location,custom_department,problem_type,anonymous_public,reporter_id,resolved_at,assigned_to,category:categories(name,icon,color),location:locations(name,building),department:departments(name),votes(value,user_id),affected_users(user_id),followers(user_id),media:issue_media(storage_path,display_order),comments(id,created_at)').eq('id', input.issueId).maybeSingle()
-  if (!issue) return Response.json({ error: 'Issue not found.' }, { status: 404 })
+  if (!issue || issue.campus_id !== campusId) return Response.json({ error: 'Issue not found.' }, { status: 404 })
   const escalationRole = issue.moderation_status !== 'approved' && issue.reporter_id !== user.id
     ? await requireCampusModerator(user.id, issue.campus_id)
     : null

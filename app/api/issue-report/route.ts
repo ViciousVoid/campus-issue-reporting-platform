@@ -45,10 +45,12 @@ export async function POST(request: Request) {
   const parsed = reportSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'Check the required report fields and try again.' }, { status: 400 })
   const input = parsed.data
+  const { data: profile, error: profileError } = await auth.from('profiles').select('campus_id').eq('id', authData.user.id).maybeSingle()
+  if (profileError || profile?.campus_id !== input.campusId) return Response.json({ error: 'Reports can only be submitted to your own campus.' }, { status: 403 })
   const admin = createAdminClient()
   const [{ data: campus }, { data: category }, locationResult, departmentResult] = await Promise.all([
     admin.from('campuses').select('id').eq('id', input.campusId).maybeSingle(),
-    admin.from('categories').select('id,name').eq('id', input.categoryId).maybeSingle(),
+    admin.from('categories').select('id,name').eq('id', input.categoryId).eq('campus_id', input.campusId).maybeSingle(),
     input.locationId ? admin.from('locations').select('id').eq('id', input.locationId).eq('campus_id', input.campusId).maybeSingle() : Promise.resolve({ data: null }),
     input.departmentId ? admin.from('departments').select('id').eq('id', input.departmentId).eq('campus_id', input.campusId).maybeSingle() : Promise.resolve({ data: null }),
   ])
