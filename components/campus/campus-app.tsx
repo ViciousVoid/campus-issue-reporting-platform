@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import {
   CATEGORY_IMAGES, STATUS_LABELS, type AppView, type Campus, type CampusIssue,
   type Category, type IssueStatus,
@@ -65,6 +66,7 @@ export function CampusApp() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -99,7 +101,7 @@ export function CampusApp() {
 
   useEffect(() => {
     let active = true
-    void supabase.auth.getUser().then(async ({ data }) => {
+    void supabase.auth.getUser().then(async ({ data }: { data: { user: User | null } }) => {
       if (!active) return
       const user = data.user
       setUserId(user?.id ?? null)
@@ -111,7 +113,7 @@ export function CampusApp() {
         if (row.campus_id) setCampusId(row.campus_id)
       }
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setUserId(session?.user.id ?? null)
       if (!session?.user) setProfile(null)
     })
@@ -169,7 +171,10 @@ export function CampusApp() {
     }
     setBusy(false)
     if (error) setNotice('Could not save your vote. Please try again.')
-    else await refreshIssues()
+    else {
+      await refreshIssues()
+      await mutate(['my-vote', issue.id, userId])
+    }
   }
 
   async function markAffected(issue: CampusIssue) {
@@ -187,12 +192,21 @@ export function CampusApp() {
   async function toggleFollow(issue: CampusIssue) {
     if (!await requireUser()) return
     setBusy(true)
-    const { data: existing } = await supabase.from('issue_followers').select('issue_id').eq('issue_id', issue.id).eq('user_id', userId!).maybeSingle()
+    const { data: existing, error: lookupError } = await supabase.from('issue_followers').select('issue_id').eq('issue_id', issue.id).eq('user_id', userId!).maybeSingle()
+    if (lookupError) {
+      setBusy(false)
+      setNotice('Could not update follow status.')
+      return
+    }
     const { error } = existing
       ? await supabase.from('issue_followers').delete().eq('issue_id', issue.id).eq('user_id', userId!)
       : await supabase.from('issue_followers').insert({ issue_id: issue.id, user_id: userId! })
     setBusy(false)
     setNotice(error ? 'Could not update follow status.' : existing ? 'You unfollowed this report.' : 'You are following this report.')
+    if (!error) {
+      await refreshIssues()
+      await mutate(['followers', issue.id, userId])
+    }
     window.setTimeout(() => setNotice(''), 2600)
   }
 
@@ -216,8 +230,10 @@ export function CampusApp() {
   }
 
   function openReport() {
-    if (!userId) setAuthOpen(true)
-    else if (!campusId) setNotice('Choose a campus before reporting a problem.')
+    if (!userId) {
+      setReportAfterAuth(true)
+      setAuthOpen(true)
+    } else if (!campusId) setNotice('Choose a campus before reporting a problem.')
     else setReportOpen(true)
   }
 
@@ -280,9 +296,9 @@ export function CampusApp() {
                 <div className="feed-tabs" role="tablist" aria-label="Feed type"><button role="tab" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'selected' : ''} onClick={() => setStatusFilter('all')}>For you</button><button role="tab" aria-selected={statusFilter === 'in_progress'} className={statusFilter === 'in_progress' ? 'selected' : ''} onClick={() => setStatusFilter('in_progress')}>In progress</button><button role="tab" aria-selected={statusFilter === 'resolved'} className={statusFilter === 'resolved' ? 'selected' : ''} onClick={() => setStatusFilter('resolved')}>Resolved</button></div>
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
               </div>
-              <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{categories.slice(0, 7).map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
+              <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{categories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
               {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => setSelectedIssueId(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} userId={userId} busy={busy} />)}</div>}
-              <div className="feed-footer"><span>Showing {filteredIssues.length} of {view === 'profile' ? userIssues.length : issues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
+              <div className="feed-footer"><span>Showing {filteredIssues.length} of {issues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
             </section>
           </>
         )}
@@ -300,8 +316,8 @@ export function CampusApp() {
       <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
 
       {notice && <div className="toast-message" role="status">{notice}</div>}
-      {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async () => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice('Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
-      {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) setProfile(data as Profile); else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false) }} />}
+      {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
+      {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) setProfile(data as Profile); else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
       {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )

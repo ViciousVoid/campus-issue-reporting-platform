@@ -42,7 +42,8 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
   })
   const parentComments = comments.filter((comment) => !comment.parent_id)
   const repliesFor = (parentId: string) => comments.filter((comment) => comment.parent_id === parentId)
-  const voteScore = issue.votes.reduce((total, vote) => total + vote.value, 0)
+  const upVotes = issue.votes.filter((vote) => vote.value === 1).length
+  const downVotes = issue.votes.filter((vote) => vote.value === -1).length
   const affected = issue.affected_users.some((entry) => entry.user_id === userId)
 
   async function submitComment(event: FormEvent<HTMLFormElement>) {
@@ -71,9 +72,10 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
             <div className="detail-location"><MapPin size={16} /><span>{issue.location?.name ?? issue.building_area ?? 'Campus-wide'}</span>{issue.building_area && issue.location?.name && <span>· {issue.building_area}</span>}</div>
             {issue.department?.name && <div className="department-note"><span>ROUTED TO</span><strong>{issue.department.name}</strong></div>}
             <div className="detail-action-row">
-              <button className={`action-button ${voteRows?.value === 1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, 1) : onRequireAuth()} disabled={busy}><ArrowUp size={17} /> Support <strong>{voteScore}</strong></button>
-              <button className={`action-button ${affected ? 'is-active' : ''}`} onClick={() => userId ? onAffected(issue) : onRequireAuth()} disabled={busy}><Users size={17} /> I&apos;m affected <strong>{issue.affected_users.length}</strong></button>
-              <button className={`action-button ${followerRows.length ? 'is-active' : ''}`} onClick={() => userId ? onFollow(issue) : onRequireAuth()} disabled={busy}><Bell size={16} /> {followerRows.length ? 'Following' : 'Follow'}</button>
+              <button className={`action-button ${voteRows?.value === 1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, 1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === 1}><ArrowUp size={17} /> Upvote <strong>{upVotes}</strong></button>
+              <button className={`action-button ${voteRows?.value === -1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, -1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === -1}><ArrowDown size={17} /> Downvote <strong>{downVotes}</strong></button>
+              <button className={`action-button ${affected ? 'is-active' : ''}`} onClick={() => userId ? onAffected(issue) : onRequireAuth()} disabled={busy} aria-pressed={affected}><Users size={17} /> I&apos;m affected <strong>{issue.affected_users.length}</strong></button>
+              <button className={`action-button ${followerRows.length ? 'is-active' : ''}`} onClick={() => userId ? onFollow(issue) : onRequireAuth()} disabled={busy} aria-pressed={followerRows.length > 0}><Bell size={16} /> {followerRows.length ? 'Following' : 'Follow'}</button>
             </div>
             <div className="comment-section">
               <div className="comment-heading"><div><span className="eyebrow">CAMPUS CONVERSATION</span><h2><MessageCircle size={18} /> Updates & comments <span className="count-pill">{comments.length}</span></h2></div></div>
