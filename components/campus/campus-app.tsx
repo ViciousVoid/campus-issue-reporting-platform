@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
@@ -72,6 +72,8 @@ export function CampusApp() {
   const [reportOpen, setReportOpen] = useState(false)
   const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
+  const [mapFocusIssueId, setMapFocusIssueId] = useState<string | null>(null)
+  const mapPanelRef = useRef<HTMLElement | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -155,7 +157,9 @@ export function CampusApp() {
   }, [])
 
   useEffect(() => {
-    if (!campusId && campuses.length) setCampusId(campuses[0].id)
+    if (!campusId && campuses.length) {
+      setCampusId(campuses.find((item) => item.slug === 'sgsits-indore')?.id ?? campuses[0].id)
+    }
   }, [campusId, campuses])
 
   const campus = campuses.find((item) => item.id === campusId) ?? campuses[0]
@@ -196,6 +200,18 @@ export function CampusApp() {
     evaluateEscalation(issueId)
   }
 
+  function showIssueOnMap(issue: CampusIssue) {
+    setMapFocusIssueId(issue.id)
+    setSelectedIssueId(null)
+    setView('home')
+  }
+
+  useEffect(() => {
+    if (!mapFocusIssueId || view !== 'home') return
+    const frame = window.requestAnimationFrame(() => mapPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [mapFocusIssueId, view])
+
   function toggleTheme() {
     const nextIsDarkMode = !isDarkMode
     setIsDarkMode(nextIsDarkMode)
@@ -210,6 +226,7 @@ export function CampusApp() {
 
   async function handleCampusChange(nextCampusId: string) {
     setCampusId(nextCampusId)
+    setMapFocusIssueId(null)
     setCampusMenuOpen(false)
     setNotice('Campus feed updated')
     if (userId) {
@@ -304,7 +321,11 @@ export function CampusApp() {
 
   const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : view === 'developer' ? 'Developer options' : 'Your profile'
   const mapCenterIssue = issues.find((issue) => issue.latitude != null && issue.longitude != null)
-  const mapCenter = mapCenterIssue ? { latitude: mapCenterIssue.latitude!, longitude: mapCenterIssue.longitude! } : null
+  const mapCenter = useMemo(() => mapCenterIssue
+    ? { latitude: mapCenterIssue.latitude!, longitude: mapCenterIssue.longitude! }
+    : campus?.slug === 'sgsits-indore'
+      ? { latitude: 22.7252, longitude: 75.8713 }
+      : null, [campus?.slug, mapCenterIssue?.latitude, mapCenterIssue?.longitude])
   const mappedIssueCount = feedIssues.filter((issue) => issue.latitude != null && issue.longitude != null).length
 
   return (
@@ -367,7 +388,7 @@ export function CampusApp() {
               <div className="welcome-art" aria-hidden="true"><div className="art-sun" /><div className="art-ground ground-back" /><div className="art-ground ground-front" /><div className="art-building building-one"><span /><span /><span /><span /></div><div className="art-building building-two"><span /><span /><span /></div><div className="art-tree tree-one" /><div className="art-tree tree-two" /><div className="art-path" /><span className="art-spark spark-one">✳</span><span className="art-spark spark-two">✳</span><div className="art-note"><span><Flame size={14} fill="currentColor" /></span><strong>Good change<br />is contagious.</strong></div></div>
             </section>
 
-            <section className="campus-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">CAMPUS MAP</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Use +/− or scroll over the map to zoom · drag to explore</span></div><CampusMap issues={feedIssues} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Only reports with a verified map pin appear here.</p></section>
+            <section ref={mapPanelRef} id="campus-map-panel" className="campus-map-panel" aria-label="Map of campus issues"><div className="campus-map-heading"><div><span className="eyebrow">CAMPUS MAP</span><h2>Issues on campus <span>{mappedIssueCount}</span></h2></div><span className="map-heading-note">Use +/− or scroll over the map to zoom · drag to explore</span></div><CampusMap issues={feedIssues} center={mapCenter} focusedIssueId={mapFocusIssueId} onIssueSelect={(issue) => openIssue(issue.id)} /><MapLegend /><p className="campus-map-caption">Map pins are approximate; open a report to review its location.</p></section>
 
             <section className="feed-content">
               <div className="feed-heading"><div><span className="eyebrow">{view === 'explore' ? 'FIND WHAT NEEDS ATTENTION' : 'HAPPENING AROUND YOU'}</span><h2>{view === 'explore' ? 'Explore campus' : 'The campus pulse'} <span className="flame-count"><Flame size={17} fill="currentColor" /> {feedIssues.length}</span></h2><p>{view === 'explore' ? 'Search reports, browse categories, and find an issue you can help move forward.' : 'Real issues. Real people. Real progress.'}</p></div><button className="desktop-report-inline" onClick={openReport}><Plus size={17} /> New report</button></div>
@@ -397,7 +418,7 @@ export function CampusApp() {
       {notice && <div className="toast-message" role="status">{notice}</div>}
       {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} initialMapCenter={mapCenter} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
       {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) { setProfile(data as Profile); if (data.campus_id) setCampusId(data.campus_id) } else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
-      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} isModerator={isModerator} isAdmin={isAdmin} onAdminChange={async (deleted, message) => { await refreshIssues(); if (deleted) setSelectedIssueId(null); setNotice(message ?? (deleted ? 'Post deleted.' : 'Post updated.')); window.setTimeout(() => setNotice(''), 3000) }} onRequireAuth={() => setAuthOpen(true)} />}
+      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onShowOnMap={showIssueOnMap} onPhotosChanged={refreshIssues} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} isModerator={isModerator} isAdmin={isAdmin} onAdminChange={async (deleted, message) => { await refreshIssues(); if (deleted) setSelectedIssueId(null); setNotice(message ?? (deleted ? 'Post deleted.' : 'Post updated.')); window.setTimeout(() => setNotice(''), 3000) }} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )
 }

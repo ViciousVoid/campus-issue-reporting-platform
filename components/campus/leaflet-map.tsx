@@ -54,6 +54,17 @@ function FitIssueBounds({ issues }: { issues: CampusIssue[] }) {
   return null
 }
 
+function FocusIssue({ issue }: { issue: CampusIssue | null }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (issue?.latitude == null || issue.longitude == null) return
+    map.setView([issue.latitude, issue.longitude], 18, { animate: true })
+  }, [issue, map])
+
+  return null
+}
+
 function PinPicker({ selected, onSelect }: { selected: Coordinates | null; onSelect: (coordinates: Coordinates) => void }) {
   useMapEvents({
     click(event) {
@@ -64,8 +75,14 @@ function PinPicker({ selected, onSelect }: { selected: Coordinates | null; onSel
   return selected ? <CircleMarker center={[selected.latitude, selected.longitude]} radius={9} pathOptions={{ color: '#fff', weight: 3, fillColor: '#ed6747', fillOpacity: 1 }} /> : null
 }
 
-export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[]; onSelectIssue: (issueId: string) => void }) {
+export function CampusIssueMap({ issues, onSelectIssue, initialCenter, focusedIssueId }: {
+  issues: CampusIssue[]
+  onSelectIssue: (issueId: string) => void
+  initialCenter?: Coordinates | null
+  focusedIssueId?: string | null
+}) {
   const located = useMemo(() => issues.filter((issue) => issue.latitude != null && issue.longitude != null), [issues])
+  const focusedIssue = located.find((issue) => issue.id === focusedIssueId) ?? null
   const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
@@ -75,6 +92,13 @@ export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[
     iconSize: [30, 38],
     iconAnchor: [15, 34],
     popupAnchor: [0, -32],
+  })])), [])
+  const focusedIcons = useMemo(() => Object.fromEntries(Object.entries(SEVERITY_COLORS).map(([severity, color]) => [severity, divIcon({
+    className: 'campus-map-marker-shell is-focused',
+    html: `<span class="campus-map-marker" style="--marker-color:${color}"><span></span></span>`,
+    iconSize: [38, 46],
+    iconAnchor: [19, 42],
+    popupAnchor: [0, -38],
   })])), [])
 
   function centerOnCurrentLocation() {
@@ -99,11 +123,13 @@ export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[
 
   return (
     <div className="campus-map-frame">
-    <MapContainer className="leaflet-campus-map" center={currentLocation ? [currentLocation.latitude, currentLocation.longitude] : DEFAULT_CENTER} zoom={currentLocation ? 16 : 5} scrollWheelZoom zoomControl>
+    <MapContainer className="leaflet-campus-map" center={currentLocation ? [currentLocation.latitude, currentLocation.longitude] : initialCenter ? [initialCenter.latitude, initialCenter.longitude] : DEFAULT_CENTER} zoom={currentLocation || initialCenter ? 16 : 5} scrollWheelZoom zoomControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <MapSizeWatcher />
+      {initialCenter && <RecenterMap center={initialCenter} />}
       {currentLocation && <RecenterMap center={currentLocation} />}
       <FitIssueBounds issues={located} />
+      <FocusIssue issue={focusedIssue} />
       {located.map((issue) => {
         const severity = issue.severity ?? 'medium'
         const color = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.medium
@@ -111,7 +137,7 @@ export function CampusIssueMap({ issues, onSelectIssue }: { issues: CampusIssue[
           <Marker
             key={issue.id}
             position={[issue.latitude!, issue.longitude!]}
-            icon={icons[severity] ?? icons.medium}
+            icon={issue.id === focusedIssueId ? focusedIcons[severity] ?? focusedIcons.medium : icons[severity] ?? icons.medium}
             title={`${severity} issue: ${issue.title}`}
             alt={`${severity} severity issue`}
             eventHandlers={{ click: () => onSelectIssue(issue.id) }}

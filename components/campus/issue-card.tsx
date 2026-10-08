@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowUp, Bell, Bookmark, Flame, MapPin, MessageCircle, MoreHorizontal, Users } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bell, Bookmark, Camera, Flame, MapPin, MessageCircle, MoreHorizontal, Users } from 'lucide-react'
 import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { getHeatLevel, getIssueRecurrenceCount, HEAT_LABELS, scoreIssueHeat, type HeatLevel, type HeatThresholds } from '@/lib/campus-heat'
 import { createClient } from '@/lib/supabase/client'
@@ -48,7 +48,7 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
       <div className="issue-card-head"><div className="issue-source"><span className="category-mark">{category.slice(0, 1)}</span><span>{category}</span><span className="source-dot" aria-hidden="true">·</span><time dateTime={issue.created_at}>{relativeTime(issue.created_at)}</time></div>{showHeatLevel && <span className={`heat-placeholder heat-${heatLevel}`} title={`${HEAT_LABELS[heatLevel]} heat score ${heatScore}`} aria-label={`${HEAT_LABELS[heatLevel]}, heat score ${heatScore}`}><Flame size={13} fill="currentColor" /> {HEAT_LABELS[heatLevel]} · {heatScore}</span>}<button className="icon-button quiet-icon" type="button" aria-label={`Open ${issue.title}`} onClick={() => onOpen(issue)}><MoreHorizontal size={19} /></button></div>
       <button className="issue-card-title" type="button" onClick={() => onOpen(issue)}><h2>{issue.title}</h2></button>
       <p className="issue-excerpt">{issue.description}</p>
-      <button className="issue-photo-wrap" type="button" onClick={() => onOpen(issue)} aria-label={`Open issue: ${issue.title}`}><img src={photo} alt={`${category} at ${locationName}`} className="issue-photo" /><span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span></button>
+      <button className="issue-photo-wrap" type="button" onClick={() => onOpen(issue)} aria-label={`Open issue: ${issue.title}`}><img src={photo} alt={`${category} at ${locationName}`} className="issue-photo" /><span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span>{(issue.media?.length ?? 0) > 1 && <span className="issue-photo-count"><Camera size={13} />{issue.media.length}</span>}</button>
       <div className="issue-location-row"><MapPin size={14} aria-hidden="true" /><span>{locationName}</span>{issue.building_area && (issue.location?.name || issue.custom_location) && <><span className="source-dot">·</span><span>{issue.building_area}</span></>}</div>
       {departmentName && <div className="issue-department-row"><span>ROUTED TO</span><strong>{departmentName}</strong></div>}
       <div className="issue-card-actions">

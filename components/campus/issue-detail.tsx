@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import useSWR, { mutate } from 'swr'
 import { ArrowDown, ArrowUp, Bell, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Sparkles, Trash2, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { STATUS_LABELS, type CampusIssue } from '@/lib/campus'
-import { IssueImage, relativeTime, statusStyles } from '@/components/campus/issue-card'
+import { relativeTime, statusStyles } from '@/components/campus/issue-card'
+import { IssuePhotoGallery } from '@/components/campus/issue-photo-gallery'
 
 type Comment = { id: string; issue_id: string; user_id: string | null; parent_id: string | null; body: string; created_at: string; author: { display_name: string } | null }
 type IssueEvent = { id: string; event_type: string; message: string | null; previous_value: string | null; new_value: string | null; created_at: string }
@@ -14,6 +15,8 @@ type IssueDetailProps = {
   issue: CampusIssue
   userId: string | null
   onClose: () => void
+  onShowOnMap: (issue: CampusIssue) => void
+  onPhotosChanged: () => Promise<void>
   onVote: (issue: CampusIssue, value: 1 | -1) => void
   onAffected: (issue: CampusIssue) => void
   onFollow: (issue: CampusIssue) => void
@@ -34,7 +37,7 @@ async function runWorkflow(payload: Record<string, unknown>) {
 
 const supabase = createClient()
 
-export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFollow, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
+export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChanged, onVote, onAffected, onFollow, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
   const [body, setBody] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [summary, setSummary] = useState(issue.ai_summary ?? '')
@@ -44,12 +47,18 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
   const [workflowNotice, setWorkflowNotice] = useState('')
   const [adminTitle, setAdminTitle] = useState('')
   const [adminDescription, setAdminDescription] = useState('')
+  const [adminUpvotes, setAdminUpvotes] = useState('0')
+  const [adminDownvotes, setAdminDownvotes] = useState('0')
   const [adminEditing, setAdminEditing] = useState(false)
   const [adminBusy, setAdminBusy] = useState(false)
   const [adminError, setAdminError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [verification, setVerification] = useState<'fixed' | 'still_a_problem' | null>(null)
   const [verificationNote, setVerificationNote] = useState('')
+  useEffect(() => {
+    setAdminUpvotes(String(issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length))
+    setAdminDownvotes(String(issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length))
+  }, [issue])
   const { data: comments = [], isLoading } = useSWR(['comments', issue.id], async ([, id]) => {
     const { data, error } = await supabase.from('comments').select('id,issue_id,user_id,parent_id,body,created_at,author:profiles(display_name)').eq('issue_id', id).order('created_at', { ascending: true })
     if (error) throw error
@@ -170,6 +179,32 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
     }
   }
 
+  async function saveVoteCounts() {
+    if (!userId) { onRequireAuth(); return }
+    const upvotes = Number(adminUpvotes)
+    const downvotes = Number(adminDownvotes)
+    if (!Number.isInteger(upvotes) || !Number.isInteger(downvotes) || upvotes < 0 || downvotes < 0 || upvotes > 1_000_000 || downvotes > 1_000_000) {
+      setAdminError('Vote totals must be whole numbers between 0 and 1,000,000.')
+      return
+    }
+    setAdminBusy(true)
+    setAdminError('')
+    try {
+      const response = await fetch('/api/developer/issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_vote_counts', issueId: issue.id, upvotes, downvotes }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.error ?? 'The displayed vote totals could not be updated.')
+      await onAdminChange(false, 'Displayed vote totals updated.')
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : 'The displayed vote totals could not be updated.')
+    } finally {
+      setAdminBusy(false)
+    }
+  }
+
   async function deletePost() {
     if (!userId) { onRequireAuth(); return }
     setAdminBusy(true)
@@ -196,7 +231,7 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
       <section className="issue-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-title">
         <header className="dialog-topbar"><span className="eyebrow">ISSUE DETAILS</span><button className="icon-button" onClick={onClose} aria-label="Close issue details"><X size={20} /></button></header>
         <div className="detail-scroll">
-          <div className="detail-image"><IssueImage issue={issue} className="detail-photo" /><span className={`status-pill ${statusStyles[issue.status]}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span></div>
+          <IssuePhotoGallery issue={issue} userId={userId} onRequireAuth={onRequireAuth} onPhotosChanged={onPhotosChanged} />
           <div className="detail-body">
             <div className="detail-meta"><span className="category-mark">{(issue.custom_category || issue.category?.name)?.slice(0, 1) ?? 'C'}</span><strong>{issue.custom_category || issue.category?.name || 'Campus issue'}</strong><span>·</span><span>{relativeTime(issue.created_at)}</span></div>
             {isAdmin && <section className="issue-admin-controls" aria-label="Post administration">
@@ -207,6 +242,14 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
                 <label className="form-field"><span>Post description</span><textarea required minLength={20} maxLength={5000} rows={5} value={adminDescription} onChange={(event) => setAdminDescription(event.target.value)} /></label>
                 <div className="issue-admin-actions"><button type="button" className="button-secondary" disabled={adminBusy} onClick={() => setAdminEditing(false)}>Cancel</button><button type="submit" className="button-primary small" disabled={adminBusy || adminTitle.trim().length < 8 || adminDescription.trim().length < 20}>{adminBusy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Save changes</button></div>
               </form>}
+              <section className="issue-admin-vote-controls" aria-label="Set displayed vote totals">
+                <div><strong>Displayed vote totals</strong><p>Adjust the counts shown on this post without changing community votes.</p></div>
+                <div className="issue-admin-vote-grid">
+                  <label>Upvotes<input type="number" min="0" max="1000000" step="1" value={adminUpvotes} onChange={(event) => setAdminUpvotes(event.target.value)} /></label>
+                  <label>Downvotes<input type="number" min="0" max="1000000" step="1" value={adminDownvotes} onChange={(event) => setAdminDownvotes(event.target.value)} /></label>
+                </div>
+                <button type="button" className="button-primary small" disabled={adminBusy || !adminUpvotes.trim() || !adminDownvotes.trim() || !Number.isInteger(Number(adminUpvotes)) || !Number.isInteger(Number(adminDownvotes)) || Number(adminUpvotes) < 0 || Number(adminDownvotes) < 0 || Number(adminUpvotes) > 1000000 || Number(adminDownvotes) > 1000000} onClick={() => void saveVoteCounts()}>{adminBusy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}Save vote totals</button>
+              </section>
               <div className="issue-admin-delete">
                 {confirmDelete ? <><p>Delete this post and its related activity? This cannot be undone.</p><div className="issue-admin-delete-actions"><button type="button" className="button-secondary" disabled={adminBusy} onClick={() => setConfirmDelete(false)}>Cancel</button><button type="button" className="developer-delete-button" disabled={adminBusy} onClick={() => void deletePost()}>{adminBusy ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />} Delete permanently</button></div></> : <div className="issue-admin-heading"><span className="eyebrow">REMOVE POST</span><button type="button" className="developer-delete-button" disabled={adminBusy} onClick={() => { setAdminError(''); setConfirmDelete(true) }}><Trash2 size={14} /> Delete post</button></div>}
               </div>
@@ -214,6 +257,7 @@ export function IssueDetail({ issue, userId, onClose, onVote, onAffected, onFoll
             </section>}
             {!adminEditing && <><h1 id="detail-title">{issue.title}</h1><p className="detail-description">{issue.description}</p></>}
             <div className="detail-location"><MapPin size={16} /><span>{issue.custom_location || issue.location?.name || issue.building_area || 'Campus-wide'}</span>{issue.building_area && (issue.location?.name || issue.custom_location) && <span>· {issue.building_area}</span>}</div>
+            {issue.latitude != null && issue.longitude != null && <button type="button" className="detail-map-button" onClick={() => onShowOnMap(issue)}><MapPin size={15} /> Show on map</button>}
             {(issue.custom_department || issue.department?.name) && <div className="department-note"><span>ROUTED TO</span><strong>{issue.custom_department || issue.department?.name}</strong></div>}
             <div className="detail-action-row">
               <button className={`action-button ${voteRows?.value === 1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, 1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === 1}><ArrowUp size={17} /> Upvote <strong>{upVotes}</strong></button>
