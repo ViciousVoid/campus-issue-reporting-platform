@@ -1,12 +1,15 @@
 'use client'
 
-import { ArrowDown, ArrowUp, Bell, Bookmark, Camera, Flame, MapPin, MessageCircle, MoreHorizontal, Users } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowDown, ArrowUp, Bell, Bookmark, Camera, Flame, MapPin, MessageCircle, Users } from 'lucide-react'
 import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { getHeatLevel, getIssueRecurrenceCount, HEAT_LABELS, scoreIssueHeat, type HeatLevel, type HeatThresholds } from '@/lib/campus-heat'
 import { createClient } from '@/lib/supabase/client'
+import { PhotoLightbox, type PhotoSlide } from '@/components/campus/photo-lightbox'
 
 export type IssueCardCallbacks = {
   onOpen: (issue: CampusIssue) => void
+  onShowOnMap: (issue: CampusIssue) => void
   onVote: (issue: CampusIssue, value: 1 | -1) => void
   onAffected: (issue: CampusIssue) => void
   onFollow: (issue: CampusIssue) => void
@@ -22,11 +25,19 @@ export const statusStyles: Record<string, string> = {
 
 const supabase = createClient()
 
-export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen, onVote, onAffected, onFollow, onAuth }: IssueCardProps) {
-  const path = issue.media?.slice().sort((a, b) => a.display_order - b.display_order)[0]?.storage_path
-  const photo = path
-    ? supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
-    : `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
+export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen, onShowOnMap, onVote, onAffected, onFollow, onAuth }: IssueCardProps) {
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const photos = issue.media?.slice().sort((a, b) => a.display_order - b.display_order) ?? []
+  const photoSlides: PhotoSlide[] = photos.length
+    ? photos.map((item) => ({
+        src: supabase.storage.from('issue-photos').getPublicUrl(item.storage_path).data.publicUrl,
+        alt: `${issue.custom_category || issue.category?.name || 'Campus issue'} at ${issue.custom_location || issue.location?.name || 'campus'}`,
+      }))
+    : [{
+        src: `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`,
+        alt: `${issue.custom_category || issue.category?.name || 'Campus issue'} at ${issue.custom_location || issue.location?.name || 'campus'}`,
+      }]
+  const photo = photoSlides[0].src
   const upVotes = issue.developer_upvote_override ?? issue.votes?.filter((vote) => vote.value === 1).length ?? 0
   const heatScore = scoreIssueHeat(issue, getIssueRecurrenceCount(issue, issues))
   const heatLevel: HeatLevel = getHeatLevel(heatScore, thresholds)
@@ -44,12 +55,13 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
 
   return (
     <article className={`issue-card${showHeatLevel ? ` heat-card heat-card-${heatLevel}` : ''}${flameBorder ? ` ${flameBorder}` : ''}`}>
+      <button className="issue-card-open-overlay" type="button" aria-label={`Open comments and details for ${issue.title}`} onClick={() => onOpen(issue)} />
       {showHeatLevel && <div className={`heat-corners heat-corners-${heatLevel}`} aria-hidden="true">{(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map((corner) => <Flame key={corner} className={corner} size={16} fill="currentColor" />)}</div>}
-      <div className="issue-card-head"><div className="issue-source"><span className="category-mark">{category.slice(0, 1)}</span><span>{category}</span><span className="source-dot" aria-hidden="true">·</span><time dateTime={issue.created_at}>{relativeTime(issue.created_at)}</time></div>{showHeatLevel && <span className={`heat-placeholder heat-${heatLevel}`} title={`${HEAT_LABELS[heatLevel]} heat score ${heatScore}`} aria-label={`${HEAT_LABELS[heatLevel]}, heat score ${heatScore}`}><Flame size={13} fill="currentColor" /> {HEAT_LABELS[heatLevel]} · {heatScore}</span>}<button className="icon-button quiet-icon" type="button" aria-label={`Open ${issue.title}`} onClick={() => onOpen(issue)}><MoreHorizontal size={19} /></button></div>
-      <button className="issue-card-title" type="button" onClick={() => onOpen(issue)}><h2>{issue.title}</h2></button>
+      <div className="issue-card-head"><div className="issue-source"><span className="category-mark">{category.slice(0, 1)}</span><span>{category}</span><span className="source-dot" aria-hidden="true">·</span><time dateTime={issue.created_at}>{relativeTime(issue.created_at)}</time></div>{showHeatLevel && <span className={`heat-placeholder heat-${heatLevel}`} title={`${HEAT_LABELS[heatLevel]} heat score ${heatScore}`} aria-label={`${HEAT_LABELS[heatLevel]}, heat score ${heatScore}`}><Flame size={13} fill="currentColor" /> {HEAT_LABELS[heatLevel]} · {heatScore}</span>}</div>
+      <div className="issue-card-title"><h2>{issue.title}</h2></div>
       <p className="issue-excerpt">{issue.description}</p>
-      <button className="issue-photo-wrap" type="button" onClick={() => onOpen(issue)} aria-label={`Open issue: ${issue.title}`}><img src={photo} alt={`${category} at ${locationName}`} className="issue-photo" /><span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span>{(issue.media?.length ?? 0) > 1 && <span className="issue-photo-count"><Camera size={13} />{issue.media.length}</span>}</button>
-      <div className="issue-location-row"><MapPin size={14} aria-hidden="true" /><span>{locationName}</span>{issue.building_area && (issue.location?.name || issue.custom_location) && <><span className="source-dot">·</span><span>{issue.building_area}</span></>}</div>
+      <button className="issue-photo-wrap" type="button" onClick={() => setLightboxOpen(true)} aria-label={`View photo for ${issue.title}`}><img src={photo} alt={`${category} at ${locationName}`} className="issue-photo" /><span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span>{photos.length > 1 && <span className="issue-photo-count"><Camera size={13} />{photos.length}</span>}</button>
+      <div className="issue-location-row"><MapPin size={14} aria-hidden="true" /><span>{locationName}</span>{issue.building_area && (issue.location?.name || issue.custom_location) && <><span className="source-dot">·</span><span>{issue.building_area}</span></>}{issue.latitude != null && issue.longitude != null && <button className="issue-card-map-button" type="button" onClick={() => onShowOnMap(issue)} aria-label={`Show ${issue.title} on the campus map`}><MapPin size={13} />Show on map</button>}</div>
       {departmentName && <div className="issue-department-row"><span>ROUTED TO</span><strong>{departmentName}</strong></div>}
       <div className="issue-card-actions">
         <button className={`action-button vote-button${hasVoted ? ' is-active' : ''}`} type="button" aria-label={`Upvote issue, ${upVotes} votes`} aria-pressed={hasVoted} disabled={busy} onClick={() => userId ? onVote(issue, 1) : onAuth()}><ArrowUp size={17} /><span>{upVotes}</span></button>
@@ -58,6 +70,7 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
         <button className="action-button" type="button" onClick={() => onOpen(issue)}><MessageCircle size={17} /><span>{comments} {comments === 1 ? 'comment' : 'comments'}</span></button>
         <button className={`action-button action-follow${isFollowing ? ' is-active' : ''}`} type="button" aria-label={isFollowing ? 'Unfollow issue updates' : 'Follow issue updates'} aria-pressed={isFollowing} disabled={busy} onClick={() => userId ? onFollow(issue) : onAuth()}>{isFollowing ? <Bookmark size={16} fill="currentColor" /> : <Bell size={16} />}<span>{isFollowing ? 'Following' : 'Follow'}</span></button>
       </div>
+      {lightboxOpen && <PhotoLightbox photos={photoSlides} onClose={() => setLightboxOpen(false)} />}
     </article>
   )
 }

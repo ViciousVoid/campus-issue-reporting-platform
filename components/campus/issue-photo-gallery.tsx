@@ -5,6 +5,7 @@ import { Camera, ImagePlus, LoaderCircle } from 'lucide-react'
 import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { statusStyles } from '@/components/campus/issue-card'
 import { createClient } from '@/lib/supabase/client'
+import { PhotoLightbox } from '@/components/campus/photo-lightbox'
 
 const supabase = createClient()
 const MAX_PHOTOS = 5
@@ -21,6 +22,7 @@ type IssuePhotoGalleryProps = {
 export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChanged }: IssuePhotoGalleryProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [selectedPath, setSelectedPath] = useState('')
+  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -29,6 +31,7 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
     [issue.media],
   )
   const selectedPhoto = photos.find((photo) => photo.storage_path === selectedPath) ?? photos[0]
+  const selectedPhotoIndex = selectedPhoto ? photos.findIndex((photo) => photo.storage_path === selectedPhoto.storage_path) : 0
   const category = issue.custom_category || issue.category?.name || 'Campus'
   const imageUrl = selectedPhoto
     ? supabase.storage.from('issue-photos').getPublicUrl(selectedPhoto.storage_path).data.publicUrl
@@ -88,10 +91,19 @@ export function IssuePhotoGallery({ issue, userId, onRequireAuth, onPhotosChange
 
   return (
     <section className="issue-photo-gallery" aria-label="Report photos">
-      <div className="detail-image">
+      <button type="button" className="detail-image detail-image-button" onClick={() => setLightboxOpen(true)} aria-label={`View photo for ${issue.title}`}>
         <img className="detail-photo" src={imageUrl} alt={`${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}`} />
         <span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span>
-      </div>
+      </button>
+      {lightboxOpen && <PhotoLightbox
+        photos={photos.length ? photos.map((photo) => ({
+          src: supabase.storage.from('issue-photos').getPublicUrl(photo.storage_path).data.publicUrl,
+          alt: `${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}`,
+        })) : [{ src: imageUrl, alt: `${category} issue at ${issue.custom_location || issue.location?.name || 'campus'}` }]}
+        initialIndex={selectedPhotoIndex}
+        onIndexChange={(index) => setSelectedPath(photos[index]?.storage_path ?? '')}
+        onClose={() => setLightboxOpen(false)}
+      />}
       {photos.length > 1 && (
         <div className="photo-thumbnail-list" role="group" aria-label="Select a report photo">
           {photos.map((photo, index) => {
