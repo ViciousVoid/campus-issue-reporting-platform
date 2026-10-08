@@ -406,6 +406,45 @@
 .campus-map-marker-shell.is-focused .campus-map-marker { outline: 3px solid #fff; box-shadow: 0 0 0 4px #ee6848, 0 3px 12px #18231d66; }
 .campus-app.dark-theme .detail-map-button { border-color: #60313b; color: #ff9aa9; background: #2b2028; }
 .campus-app.dark-theme .issue-admin-vote-grid input { border-color: var(--border); color: var(--ink); background: #211d28; }
+.place-filter-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.place-filter-select { min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; color: var(--subtle-ink); background: var(--card); }
+.place-filter-select > svg:first-child { flex: 0 0 auto; color: var(--accent); }
+.place-filter-select > svg:last-child { flex: 0 0 auto; pointer-events: none; }
+.place-filter-select select { min-width: 0; max-width: 100%; height: 36px; padding: 0 18px 0 0; appearance: none; border: 0; outline: 0; color: inherit; background: transparent; cursor: pointer; font-size: 10px; font-weight: 600; }
+.fire-filter { min-height: 36px; padding: 0 11px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e9c8bc; border-radius: 9px; color: #b95c42; background: #fff8f5; cursor: pointer; font-size: 10px; font-weight: 700; }
+.fire-filter.chosen { border-color: #df7052; color: #fff; background: #df7052; }
+.campus-app.dark-theme .place-filter-select { border-color: var(--border); color: #d1c7d7; background: #1d1923; }
+.campus-app.dark-theme .fire-filter { border-color: #59353a; color: #ffadb7; background: #2b2028; }
+.campus-app.dark-theme .fire-filter.chosen { border-color: #d93b57; color: #fff; background: #c8324c; }
+.account-menu-wrap { position: relative; }
+.account-menu-wrap .user-chip { max-width: 170px; }
+.account-menu { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: 205px; padding: 10px; display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: 0 14px 32px #18251d24; }
+.account-menu-label { color: var(--muted-foreground); font-size: 9px; }
+.account-menu > strong { overflow: hidden; margin-bottom: 5px; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.account-menu > button { min-height: 34px; padding: 0 8px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 7px; color: var(--subtle-ink); background: transparent; cursor: pointer; text-align: left; font-size: 10px; font-weight: 600; }
+.account-menu > button:hover { color: var(--accent-dark); background: var(--soft); }
+.comment-section { margin-top: 17px; padding: 16px; border: 1px solid #dbe5da; border-radius: 13px; background: #f6faf5; }
+.comment-heading { margin-bottom: 12px; }
+.comment-heading > div > .eyebrow { color: #5c705f; }
+.comment-heading h2 { color: #202923; font-size: 17px; }
+.comments-list { display: grid; gap: 9px; margin-top: 12px; }
+.comment-item { padding: 11px; border: 1px solid #e2e9e1; border-radius: 10px; background: #fff; }
+.comment-author strong { color: #26332a; font-size: 11px; }
+.comment-author time { color: #68766c; font-size: 9px; }
+.comment-content p { margin: 5px 0; color: #2e3a31; font-size: 12px; line-height: 1.65; }
+.comment-form { border-color: #d3dfd2; background: #fff; }
+.comment-form textarea { color: #26332a; font-size: 12px; }
+.comment-form-foot > span { color: #647268; font-size: 9px; }
+.comment-empty { padding: 13px; border: 1px dashed #d2ddd1; border-radius: 9px; color: #5d6d61; background: #fff; font-size: 11px; }
+.comment-reply { border-left-color: #cbd9ca; }
+.campus-app.dark-theme .comment-section { border-color: #514657; background: #201b26; }
+.campus-app.dark-theme .comment-heading > div > .eyebrow { color: #c4b5ca; }
+.campus-app.dark-theme .comment-heading h2 { color: #f3edf5; }
+.campus-app.dark-theme .comment-item,.campus-app.dark-theme .comment-form,.campus-app.dark-theme .comment-empty { border-color: #514657; background: #28232e; }
+.campus-app.dark-theme .comment-author strong,.campus-app.dark-theme .comment-content p,.campus-app.dark-theme .comment-form textarea { color: #f0e8f2; }
+.campus-app.dark-theme .comment-author time,.campus-app.dark-theme .comment-form-foot > span,.campus-app.dark-theme .comment-empty { color: #c6b9cc; }
+.campus-app.dark-theme .comment-reply { border-left-color: #66586e; }
+@media (max-width: 720px) { .place-filter-select { flex: 1; } .place-filter-select select { flex: 1; } .comment-section { padding: 12px; } }
 
 @media (max-width: 720px) {
   .community-photo-row { padding-right: 14px; padding-left: 14px; }

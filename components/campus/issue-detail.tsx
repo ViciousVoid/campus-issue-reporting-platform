@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react'
 import useSWR, { mutate } from 'swr'
-import { ArrowDown, ArrowUp, Bell, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Sparkles, Trash2, Users, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Sparkles, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { relativeTime, statusStyles } from '@/components/campus/issue-card'
@@ -18,8 +18,6 @@ type IssueDetailProps = {
   onShowOnMap: (issue: CampusIssue) => void
   onPhotosChanged: () => Promise<void>
   onVote: (issue: CampusIssue, value: 1 | -1) => void
-  onAffected: (issue: CampusIssue) => void
-  onFollow: (issue: CampusIssue) => void
   onComment: (issueId: string, body: string, parentId?: string) => Promise<boolean>
   busy: boolean
   isModerator?: boolean
@@ -37,7 +35,7 @@ async function runWorkflow(payload: Record<string, unknown>) {
 
 const supabase = createClient()
 
-export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChanged, onVote, onAffected, onFollow, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
+export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChanged, onVote, onComment, busy, isModerator = false, isAdmin = false, onAdminChange, onRequireAuth }: IssueDetailProps) {
   const [body, setBody] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const [summary, setSummary] = useState(issue.ai_summary ?? '')
@@ -75,11 +73,6 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
     return (data ?? []) as ResolutionCheck[]
   })
   const myVerification = resolutionChecks.find((check) => check.user_id === userId)?.result ?? verification
-  const { data: followerRows = [] } = useSWR(userId ? ['followers', issue.id, userId] : null, async ([, issueId, uid]) => {
-    const { data, error } = await supabase.from('issue_followers').select('user_id').eq('issue_id', issueId).eq('user_id', uid)
-    if (error) throw error
-    return data ?? []
-  })
   const { data: voteRows = [] } = useSWR(userId ? ['my-vote', issue.id, userId] : null, async ([, issueId, uid]) => {
     const { data, error } = await supabase.from('votes').select('value').eq('issue_id', issueId).eq('user_id', uid).maybeSingle()
     if (error) throw error
@@ -89,7 +82,6 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   const repliesFor = (parentId: string) => comments.filter((comment) => comment.parent_id === parentId)
   const upVotes = issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length
   const downVotes = issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length
-  const affected = issue.affected_users.some((entry) => entry.user_id === userId)
 
   async function submitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -262,8 +254,6 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
             <div className="detail-action-row">
               <button className={`action-button ${voteRows?.value === 1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, 1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === 1}><ArrowUp size={17} /> Upvote <strong>{upVotes}</strong></button>
               <button className={`action-button ${voteRows?.value === -1 ? 'is-active' : ''}`} onClick={() => userId ? onVote(issue, -1) : onRequireAuth()} disabled={busy} aria-pressed={voteRows?.value === -1}><ArrowDown size={17} /> Downvote <strong>{downVotes}</strong></button>
-              <button className={`action-button ${affected ? 'is-active' : ''}`} onClick={() => userId ? onAffected(issue) : onRequireAuth()} disabled={busy} aria-pressed={affected}><Users size={17} /> I&apos;m affected <strong>{issue.affected_users.length}</strong></button>
-              <button className={`action-button ${followerRows.length ? 'is-active' : ''}`} onClick={() => userId ? onFollow(issue) : onRequireAuth()} disabled={busy} aria-pressed={followerRows.length > 0}><Bell size={16} /> {followerRows.length ? 'Following' : 'Follow'}</button>
             </div>
             <div className="comment-section">
               <div className="comment-heading"><div><span className="eyebrow">CAMPUS CONVERSATION</span><h2><MessageCircle size={18} /> Updates & comments <span className="count-pill">{comments.length}</span></h2></div></div>

@@ -5,7 +5,7 @@ import useSWR, { mutate } from 'swr'
 import {
   ArrowDown, ArrowLeft, ArrowUp, Bell, BookOpen, Building2, Camera, Check, ChevronDown,
   CircleHelp, Clock3, Compass, Flame, Heart, ImagePlus, LoaderCircle, LogIn, MapPin,
-  MessageCircle, Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, Wrench, X,
+  Moon, Plus, Search, Send, ShieldCheck, Sparkles, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -19,7 +19,7 @@ import { IssueDetail } from '@/components/campus/issue-detail'
 import { ReportDialog } from '@/components/campus/report-dialog'
 import { AuthDialog } from '@/components/campus/auth-dialog'
 import { ModeratorDashboard } from '@/components/campus/moderator-dashboard'
-import { DEFAULT_HEAT_THRESHOLDS, getHeatThresholds, type HeatThresholds } from '@/lib/campus-heat'
+import { DEFAULT_HEAT_THRESHOLDS, getHeatLevel, getHeatThresholds, getIssueRecurrenceCount, scoreIssueHeat, type HeatThresholds } from '@/lib/campus-heat'
 import { CampusMap } from '@/components/campus/campus-map'
 import { DeveloperTools } from '@/components/campus/developer-tools'
 
@@ -28,6 +28,7 @@ const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,departmen
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
+type CampusLocation = { id: string; name: string; building: string | null }
 
 async function loadCampuses(): Promise<Campus[]> {
   const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug').order('name')
@@ -78,7 +79,10 @@ export function CampusApp() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [locationFilter, setLocationFilter] = useState('all')
+  const [fireOnly, setFireOnly] = useState(false)
   const [campusMenuOpen, setCampusMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -99,7 +103,7 @@ export function CampusApp() {
   const { data: locations = [] } = useSWR(campusId ? ['locations', campusId] : null, async ([, cid]) => {
     const { data, error } = await supabase.from('locations').select('id,name,building').eq('campus_id', cid).order('name')
     if (error) throw error
-    return data ?? []
+    return (data ?? []) as CampusLocation[]
   })
   const { data: departments = [] } = useSWR(campusId ? ['departments', campusId] : null, async ([, cid]) => {
     const { data, error } = await supabase.from('departments').select('id,name').eq('campus_id', cid).order('name')
@@ -169,6 +173,7 @@ export function CampusApp() {
     const priority = (name: string) => name.toLowerCase() === 'classroom' ? 0 : name.toLowerCase() === 'hostel' ? 1 : 2
     return priority(a.name) - priority(b.name) || a.name.localeCompare(b.name)
   }), [categories])
+  const selectedLocation = locations.find((location) => location.id === locationFilter)
   const filteredIssues = useMemo(() => {
     const base = view === 'profile' ? userIssues : feedIssues
     const normalized = query.trim().toLowerCase()
@@ -176,9 +181,11 @@ export function CampusApp() {
       const matchesText = !normalized || [issue.title, issue.description, issue.custom_category, issue.category?.name, issue.custom_location, issue.location?.name, issue.building_area, issue.custom_department, issue.department?.name, issue.problem_type].some((value) => value?.toLowerCase().includes(normalized))
       const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
       const matchesCategory = categoryFilter === 'all' || (issue.custom_category || issue.category?.name) === categoryFilter
-      return matchesText && matchesStatus && matchesCategory
+      const matchesLocation = locationFilter === 'all' || issue.location_id === locationFilter || Boolean(selectedLocation && [issue.location?.name, issue.custom_location].some((name) => name?.trim().toLowerCase() === selectedLocation.name.trim().toLowerCase()))
+      const matchesFire = !fireOnly || (Boolean(selectedLocation) && getHeatLevel(scoreIssueHeat(issue, getIssueRecurrenceCount(issue, feedIssues)), thresholds) !== 'normal')
+      return matchesText && matchesStatus && matchesCategory && matchesLocation && matchesFire
     })
-  }, [categoryFilter, feedIssues, query, statusFilter, userIssues, view])
+  }, [categoryFilter, feedIssues, fireOnly, locationFilter, query, selectedLocation, statusFilter, thresholds, userIssues, view])
 
   const refreshIssues = useCallback(async () => {
     await mutate(['issues', campusId])
@@ -234,6 +241,8 @@ export function CampusApp() {
     setCampusId(nextCampusId)
     setMapFocusIssueId(null)
     setMapScrollIssueId(null)
+    setLocationFilter('all')
+    setFireOnly(false)
     setCampusMenuOpen(false)
     setNotice('Campus feed updated')
     if (userId) {
@@ -260,42 +269,6 @@ export function CampusApp() {
       evaluateEscalation(issue.id)
       await mutate(['my-vote', issue.id, userId])
     }
-  }
-
-  async function markAffected(issue: CampusIssue) {
-    if (!await requireUser()) return
-    setBusy(true)
-    const affected = issue.affected_users.some((row) => row.user_id === userId)
-    const { error } = affected
-      ? await supabase.from('affected_users').delete().eq('issue_id', issue.id).eq('user_id', userId!)
-      : await supabase.from('affected_users').insert({ issue_id: issue.id, user_id: userId! })
-    setBusy(false)
-    if (error) setNotice('Could not update your response.')
-    else {
-      await refreshIssues()
-      evaluateEscalation(issue.id)
-    }
-  }
-
-  async function toggleFollow(issue: CampusIssue) {
-    if (!await requireUser()) return
-    setBusy(true)
-    const { data: existing, error: lookupError } = await supabase.from('issue_followers').select('issue_id').eq('issue_id', issue.id).eq('user_id', userId!).maybeSingle()
-    if (lookupError) {
-      setBusy(false)
-      setNotice('Could not update follow status.')
-      return
-    }
-    const { error } = existing
-      ? await supabase.from('issue_followers').delete().eq('issue_id', issue.id).eq('user_id', userId!)
-      : await supabase.from('issue_followers').insert({ issue_id: issue.id, user_id: userId! })
-    setBusy(false)
-    setNotice(error ? 'Could not update follow status.' : existing ? 'You unfollowed this report.' : 'You are following this report.')
-    if (!error) {
-      await refreshIssues()
-      await mutate(['followers', issue.id, userId])
-    }
-    window.setTimeout(() => setNotice(''), 2600)
   }
 
   async function addComment(issueId: string, body: string, parentId?: string) {
@@ -354,7 +327,6 @@ export function CampusApp() {
         </div>
         <nav className="side-links" aria-label="Main">
           {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={19} /><span>{label}</span>{id === 'activity' && <span className="nav-dot" />}</button>)}
-          {isModerator && <button className={`side-link ${view === 'moderator' ? 'active' : ''}`} onClick={() => setView('moderator')}><ShieldCheck size={19} /><span>Campus operations</span></button>}
           {isAdmin && <button className={`side-link ${view === 'developer' ? 'active' : ''}`} onClick={() => setView('developer')}><Wrench size={19} /><span>Developer options</span></button>}
         </nav>
         <button className="theme-toggle sidebar-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}<span>{isDarkMode ? 'Light mode' : 'Dark mode'}</span></button>
@@ -386,7 +358,7 @@ export function CampusApp() {
         ) : view === 'profile' ? (
           <section className="content-page profile-page">
             <PageHeading eyebrow="YOUR CAMPUS FOOTPRINT" title={pageTitle} description="Every report is a step toward a better campus." />
-            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div>{isModerator && <button className="moderator-profile-link" onClick={() => setView('moderator')}><ShieldCheck size={17} /><span><strong>Campus operations</strong><small>Review reports and manage follow-through</small></span><ArrowUp size={15} /></button>}<div className="section-title-row"><div><span className="eyebrow">YOUR CONTRIBUTIONS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="Your story starts here" body="Report a campus issue and help get it on the right people's radar." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}</>}
+            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div><div className="section-title-row"><div><span className="eyebrow">YOUR CONTRIBUTIONS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="Your story starts here" body="Report a campus issue and help get it on the right people's radar." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}</>}
           </section>
         ) : (
           <>
@@ -403,8 +375,12 @@ export function CampusApp() {
                 <div className="feed-tabs" role="tablist" aria-label="Feed type"><button role="tab" aria-selected={statusFilter === 'all'} className={statusFilter === 'all' ? 'selected' : ''} onClick={() => setStatusFilter('all')}>For you</button><button role="tab" aria-selected={statusFilter === 'in_progress'} className={statusFilter === 'in_progress' ? 'selected' : ''} onClick={() => setStatusFilter('in_progress')}>In progress</button><button role="tab" aria-selected={statusFilter === 'resolved'} className={statusFilter === 'resolved' ? 'selected' : ''} onClick={() => setStatusFilter('resolved')}>Resolved</button></div>
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
               </div>
+              <div className="place-filter-row">
+                <label className="place-filter-select"><MapPin size={15} aria-hidden="true" /><span className="sr-only">Filter issues by place</span><select aria-label="Filter issues by place" value={locationFilter} onChange={(event) => { setLocationFilter(event.target.value); if (event.target.value === 'all') setFireOnly(false) }}><option value="all">All places</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.building ? ` · ${location.building}` : ''}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></label>
+                {selectedLocation && <button type="button" className={`fire-filter${fireOnly ? ' chosen' : ''}`} aria-pressed={fireOnly} onClick={() => setFireOnly(!fireOnly)}><Flame size={15} fill="currentColor" /> Fire</button>}
+              </div>
               <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{orderedCategories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
-              {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}
+              {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all' || fireOnly ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all' || fireOnly ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all'); setLocationFilter('all'); setFireOnly(false) }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onShowOnMap={showIssueOnMap} onVote={(item, value) => castVote(item, value)} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}
               <div className="feed-footer"><span>Showing {filteredIssues.length} of {feedIssues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
             </section>
           </>
@@ -412,10 +388,8 @@ export function CampusApp() {
       </main>
 
       <aside className="right-column" aria-label="Campus highlights">
-        <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <button className="user-chip" onClick={() => setView('profile')}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}</button> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
+        <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
         <section className="campus-card"><div className="campus-card-top"><span className="campus-card-icon"><Building2 size={17} /></span><span className="eyebrow">YOUR CAMPUS</span><button aria-label="Change campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)}><ChevronDown size={16} /></button></div><h2>{campus?.name ?? 'Campus community'}</h2><p><MapPin size={14} />{campus?.city ?? 'Choose your campus'}</p><div className="campus-stats"><div><strong>{issues.length}</strong><span>open reports</span></div><div><strong>{issues.filter((issue) => issue.status === 'resolved').length}</strong><span>resolved</span></div></div><button className="campus-card-link" onClick={() => setView('explore')}>Explore campus <ArrowUp size={14} /></button></section>
-        <section className="progress-card"><div className="side-section-heading"><div><span className="eyebrow">COMMUNITY MOMENTUM</span><h3>Good things move.</h3></div><Sparkles size={17} /></div><div className="progress-metric"><strong>{issues.reduce((total, issue) => total + issue.affected_users.length, 0)}</strong><span>students have spoken up</span></div><div className="progress-bar"><span style={{ width: `${Math.min(100, Math.max(16, issues.length ? (issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100 : 16))}%` }} /></div><div className="progress-foot"><span>Campus follow-through</span><span>{issues.length ? Math.round((issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100) : 0}%</span></div></section>
-        <section className="trending-section"><div className="side-section-heading"><div><span className="eyebrow">PICKING UP STEAM</span><h3>Most discussed</h3></div><Flame size={17} fill="currentColor" /></div>{issues.slice().sort((a, b) => b.comments.length + b.affected_users.length - a.comments.length - a.affected_users.length).slice(0, 3).map((issue, index) => <button key={issue.id} className="trending-item" onClick={() => openIssue(issue.id)}><span className={`trending-rank ${index === 0 ? 'hot' : ''}`}>0{index + 1}</span><span><strong>{issue.title}</strong><small><MessageCircle size={12} /> {issue.comments.length} comments · {timeAgo(issue.created_at)}</small></span><ArrowUp size={14} /></button>)}</section>
         <div className="community-note"><ShieldCheck size={17} /><span><strong>Real people. Real progress.</strong><small>Keep it kind, constructive, and campus-focused.</small></span></div>
         <footer className="right-footer"><span>© 2026 campusheat</span><span>Community first <Flame size={12} /></span></footer>
       </aside>
@@ -425,7 +399,7 @@ export function CampusApp() {
       {notice && <div className="toast-message" role="status">{notice}</div>}
       {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} initialMapCenter={mapCenter} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
       {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) { setProfile(data as Profile); if (data.campus_id) setCampusId(data.campus_id) } else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
-      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onShowOnMap={showIssueOnMap} onPhotosChanged={refreshIssues} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} isModerator={isModerator} isAdmin={isAdmin} onAdminChange={async (deleted, message) => { await refreshIssues(); if (deleted) setSelectedIssueId(null); setNotice(message ?? (deleted ? 'Post deleted.' : 'Post updated.')); window.setTimeout(() => setNotice(''), 3000) }} onRequireAuth={() => setAuthOpen(true)} />}
+      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onShowOnMap={showIssueOnMap} onPhotosChanged={refreshIssues} onVote={castVote} onComment={addComment} busy={busy} isModerator={isModerator} isAdmin={isAdmin} onAdminChange={async (deleted, message) => { await refreshIssues(); if (deleted) setSelectedIssueId(null); setNotice(message ?? (deleted ? 'Post deleted.' : 'Post updated.')); window.setTimeout(() => setNotice(''), 3000) }} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )
 }
