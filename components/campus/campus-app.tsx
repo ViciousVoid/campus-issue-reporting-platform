@@ -76,6 +76,7 @@ export function CampusApp() {
   const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [chatExpanded, setChatExpanded] = useState(false)
+  const [chatHeight, setChatHeight] = useState(84)
   const [mapFocusIssueId, setMapFocusIssueId] = useState<string | null>(null)
   const [mapScrollIssueId, setMapScrollIssueId] = useState<string | null>(null)
   const mapPanelRef = useRef<HTMLElement | null>(null)
@@ -455,9 +456,9 @@ export function CampusApp() {
         )}
       </main>
 
-      <aside className="right-column" aria-label="Campus chat and account">
+      <aside className="right-column" aria-label="Campus chat and account" style={{ height: `${chatHeight}vh` }}>
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <div className="account-menu-wrap"><button className="user-chip" type="button" aria-label={`Open account menu for ${profile?.display_name ?? 'Student'}`} aria-expanded={profileMenuOpen} aria-controls="account-menu" onClick={() => setProfileMenuOpen((open) => !open)}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}<ChevronDown size={13} /></button>{profileMenuOpen && <div className="account-menu" id="account-menu" aria-label="Account actions"><span className="account-menu-label">Signed in as</span><strong>{profile?.display_name ?? 'Student'}</strong><button onClick={() => { setView('profile'); setProfileMenuOpen(false) }}><Users size={15} /> My profile</button><button onClick={() => { setProfileMenuOpen(false); setView('home'); void supabase.auth.signOut() }}><LogIn size={15} /> Sign out</button></div>}</div> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
-        <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />
+        <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={chatExpanded} height={chatHeight} onHeightChange={setChatHeight} onToggleExpanded={() => setChatExpanded((expanded) => !expanded)} onRequireAuth={() => setAuthOpen(true)} />
       </aside>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">{navItems.slice(0, 2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => setView(id)}><Icon size={20} /><span>{label}</span></button>)}<button className="mobile-report-button" onClick={openReport} aria-label="Report an issue"><span><Plus size={23} /></span><small>Report</small></button>{navItems.slice(2).map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'active' : ''} onClick={() => userId ? setView(id) : setAuthOpen(true)}><Icon size={20} /><span>{label}</span></button>)}</nav>
