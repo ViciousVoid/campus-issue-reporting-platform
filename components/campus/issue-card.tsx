@@ -31,7 +31,7 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
   const heatScore = scoreIssueHeat(issue, getIssueRecurrenceCount(issue, issues))
   const heatLevel: HeatLevel = getHeatLevel(heatScore, thresholds)
   const showHeatLevel = !issue.demoOnly && heatLevel !== 'normal'
-  const flameBorder = upVotes > 40 ? 'issue-card-flame-purple-magenta' : upVotes > 15 ? 'issue-card-flame-ember' : ''
+  const flameBorder = upVotes > 40 ? 'issue-card-flame-purple-magenta' : upVotes > 15 && upVotes < 40 ? 'issue-card-flame-ember' : ''
   const downVotes = issue.developer_downvote_override ?? issue.votes?.filter((vote) => vote.value === -1).length ?? 0
   const hasVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === 1))
   const hasDownVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === -1))

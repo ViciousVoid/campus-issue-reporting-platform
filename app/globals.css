@@ -386,7 +386,7 @@
 .issue-card-demo .issue-card-head > .icon-button { display: none; }
 .issue-card-demo .issue-card-title,.issue-card-demo .issue-photo-wrap { cursor: default; }
 .issue-card-demo .issue-card-actions button:disabled { opacity: .72; cursor: not-allowed; }
-.campus-app.dark-theme .issue-card.issue-card-flame-blue-magenta,.campus-app.dark-theme .issue-card.issue-card-flame-ember { border-color: transparent; }
+.campus-app.dark-theme .issue-card.issue-card-flame-purple-magenta,.campus-app.dark-theme .issue-card.issue-card-flame-ember { border-color: transparent; }
 .campus-app.dark-theme .trial-sample-tag { border-color: #574454; color: #ffc1d1; background: #30232f; }
 @keyframes flame-border-flow { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
 @keyframes heat-flicker { from { opacity: .42; } to { opacity: .88; } }
@@ -504,7 +504,7 @@ button.admin-stat-card { cursor: pointer; }
   .campus-app.dark-theme .heat-blue_flame,.campus-app.dark-theme .heat-corners-blue_flame { --heat-color: #a78bfa; color: #c4b5fd; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .heat-corners svg,.issue-card-flame-blue-magenta,.issue-card-flame-ember,.issue-card-flame-blue-magenta::before,.issue-card-flame-ember::before { animation: none; }
+  .heat-corners svg,.issue-card-flame-purple-magenta,.issue-card-flame-ember,.issue-card-flame-purple-magenta::before,.issue-card-flame-ember::before { animation: none; }
 }
 .admin-status,.resolution-timeline .status-pill { position: static; }
 
