@@ -27,8 +27,6 @@ type CampusChatProps = {
   campusName: string
   userId: string | null
   expanded: boolean
-  height: number
-  onHeightChange: (height: number) => void
   onToggleExpanded: () => void
   onRequireAuth: () => void
 }
@@ -38,7 +36,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const IMAGE_EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 
-export function CampusChat({ campusId, campusName, userId, expanded, height, onHeightChange, onToggleExpanded, onRequireAuth }: CampusChatProps) {
+export function CampusChat({ campusId, campusName, userId, expanded, onToggleExpanded, onRequireAuth }: CampusChatProps) {
   const [body, setBody] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -163,21 +161,6 @@ export function CampusChat({ campusId, campusName, userId, expanded, height, onH
           <strong>Campus chat</strong>
           <span><Building2 size={11} />{campusName}</span>
         </div>
-        <label className="campus-chat-height-control">
-          <span className="sr-only">Chat window height</span>
-          <input
-            type="range"
-            min={55}
-            max={100}
-            step={1}
-            value={height}
-            aria-label="Chat window height"
-            aria-valuetext={`${height}% of the screen`}
-            title={`Chat window height: ${height}%`}
-            onChange={(event) => onHeightChange(Number(event.target.value))}
-          />
-          <output aria-hidden="true">{height}%</output>
-        </label>
         <button
           className="icon-button campus-chat-expand"
           type="button"
