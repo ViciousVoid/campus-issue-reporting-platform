@@ -131,6 +131,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [reportAfterAuth, setReportAfterAuth] = useState(false)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [chatExpanded, setChatExpanded] = useState(false)
+  const [chatWidth, setChatWidth] = useState(348)
   const chatRestoreWidthRef = useRef<number | null>(null)
   const chatResizeStartRef = useRef<{ pointerId: number; startX: number; startedExpanded: boolean; restoreWidth: number } | null>(null)
   const [mapFocusIssueId, setMapFocusIssueId] = useState<string | null>(null)
@@ -251,14 +252,25 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     '--accent-dark': campus?.brand_dark_color ?? '#d95739',
     '--primary': campus?.brand_color ?? '#ee6848',
     '--ring': campus?.brand_color ?? '#ee6848',
+    '--chat-width': `${chatWidth}px`,
     '--accent-gradient': `linear-gradient(115deg, ${campus?.brand_color ?? '#ee6848'} 0%, ${campus?.brand_dark_color ?? '#d95739'} 100%)`,
   } as CSSProperties
 
-  function toggleChatExpanded() {
-    if (!chatExpanded) {
-      const panelWidth = document.querySelector('.right-column')?.getBoundingClientRect().width
-      chatRestoreWidthRef.current = panelWidth ?? (window.matchMedia('(min-width: 1400px)').matches ? 375 : 348)
+  function getChatWidthBounds() {
+    const wideDesktop = window.matchMedia('(min-width: 1400px)').matches
+    const sidebarWidth = wideDesktop ? 270 : 252
+    const minimumFeedWidth = wideDesktop ? 520 : 420
+    const availableWidth = Math.max(348, window.innerWidth - sidebarWidth)
+    const maxWidth = Math.max(348, availableWidth - minimumFeedWidth)
+
+    return {
+      maxWidth,
+      expandThreshold: Math.min(availableWidth * 0.62, maxWidth - 24),
     }
+  }
+
+  function toggleChatExpanded() {
+    if (!chatExpanded) chatRestoreWidthRef.current = chatWidth
     setChatExpanded((expanded) => !expanded)
   }
 
@@ -266,10 +278,10 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     const panel = event.currentTarget.parentElement
     if (!panel) return
     event.preventDefault()
+    event.currentTarget.focus()
     event.currentTarget.setPointerCapture(event.pointerId)
-    const defaultWidth = window.matchMedia('(min-width: 1400px)').matches ? 375 : 348
     const restoreWidth = chatExpanded
-      ? chatRestoreWidthRef.current ?? defaultWidth
+      ? chatRestoreWidthRef.current ?? chatWidth
       : panel.getBoundingClientRect().width
     chatResizeStartRef.current = {
       pointerId: event.pointerId,
@@ -282,13 +294,17 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   function moveChatResize(event: ReactPointerEvent<HTMLDivElement>) {
     const start = chatResizeStartRef.current
     if (!start || start.pointerId !== event.pointerId) return
-    const slide = start.startX - event.clientX
-    if (!start.startedExpanded && slide > 18) {
-      chatRestoreWidthRef.current = start.restoreWidth
-      setChatExpanded(true)
-    } else if (start.startedExpanded && slide < -18) {
-      setChatExpanded(false)
+
+    if (start.startedExpanded) {
+      if (event.clientX - start.startX > 24) setChatExpanded(false)
+      return
     }
+
+    const { maxWidth, expandThreshold } = getChatWidthBounds()
+    const nextWidth = Math.max(348, Math.min(maxWidth, start.restoreWidth + start.startX - event.clientX))
+    chatRestoreWidthRef.current = nextWidth
+    setChatWidth(nextWidth)
+    setChatExpanded(nextWidth >= expandThreshold)
   }
 
   function stopChatResize() {
@@ -296,12 +312,38 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   }
 
   function handleChatResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key === 'ArrowLeft' || event.key === 'Home') {
+    if (event.key === 'Home') {
       event.preventDefault()
-      if (!chatExpanded) toggleChatExpanded()
-    } else if (event.key === 'ArrowRight' || event.key === 'End') {
+      chatRestoreWidthRef.current = 348
+      setChatWidth(348)
+      setChatExpanded(false)
+      return
+    }
+
+    if (event.key === 'End') {
       event.preventDefault()
-      if (chatExpanded) setChatExpanded(false)
+      chatRestoreWidthRef.current = chatWidth
+      setChatExpanded(true)
+      return
+    }
+
+    if (event.key === 'ArrowLeft' && !chatExpanded) {
+      event.preventDefault()
+      const { maxWidth, expandThreshold } = getChatWidthBounds()
+      const nextWidth = Math.min(maxWidth, chatWidth + 32)
+      chatRestoreWidthRef.current = nextWidth
+      setChatWidth(nextWidth)
+      setChatExpanded(nextWidth >= expandThreshold)
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      if (chatExpanded) {
+        setChatExpanded(false)
+      } else {
+        const renderedWidth = document.querySelector('.right-column')?.getBoundingClientRect().width ?? chatWidth
+        const nextWidth = Math.max(348, renderedWidth - 32)
+        chatRestoreWidthRef.current = nextWidth
+        setChatWidth(nextWidth)
+      }
     }
   }
 
@@ -619,12 +661,12 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
         <div
           className="campus-chat-resize-handle"
           role="separator"
-          aria-label="Expand or restore campus chat"
+          aria-label="Resize campus chat; drag left to widen, drag right to restore, use arrows to resize, Home to reset, End to expand"
           aria-orientation="vertical"
-          aria-valuemin={0}
-          aria-valuemax={1}
-          aria-valuenow={chatExpanded ? 1 : 0}
-          aria-valuetext={chatExpanded ? 'Full screen' : 'Standard width'}
+          aria-valuemin={348}
+          aria-valuemax={1600}
+          aria-valuenow={chatExpanded ? 1600 : Math.round(chatWidth)}
+          aria-valuetext={chatExpanded ? 'Expanded across the middle column' : `${Math.round(chatWidth)} pixels wide`}
           tabIndex={0}
           onPointerDown={startChatResize}
           onPointerMove={moveChatResize}
