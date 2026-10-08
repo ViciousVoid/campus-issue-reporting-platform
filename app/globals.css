@@ -296,6 +296,7 @@
 .theme-toggle:hover,.mobile-theme-toggle:hover { color: var(--accent-dark); background: var(--soft); }
 .sidebar-theme-toggle { width: 100%; margin-top: 11px; justify-content: flex-start; }
 .mobile-theme-toggle { display: none; }
+.heat-placeholder.is-hot { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border: 1px solid #bfdbfe; border-radius: 999px; color: #2563eb; background: #eff6ff; font-size: 10px; font-weight: 700; white-space: nowrap; }
 
 .campus-app.dark-theme {
   color-scheme: dark;
@@ -312,39 +313,40 @@
   --subtle-ink: #c0b6c7;
   --soft: #28232e;
   --accent: #f0445f;
-  --accent-dark: #c34bd6;
-  --accent-gradient: linear-gradient(115deg, #f0445f 0%, #d83a9c 55%, #9855e8 100%);
+  --accent-dark: #d93b57;
+  --accent-gradient: linear-gradient(115deg, #f0445f 0%, #e13b50 58%, #c52643 100%);
   background: var(--page);
   color: var(--ink);
 }
 .campus-app.dark-theme .campus-sidebar,.campus-app.dark-theme .right-column,.campus-app.dark-theme .mobile-header,.campus-app.dark-theme .mobile-nav { border-color: var(--border); background: #19151f; }
 .campus-app.dark-theme .campus-switcher,.campus-app.dark-theme .progress-card,.campus-app.dark-theme .welcome-panel { border-color: var(--border); background: #211d28; }
 .campus-app.dark-theme .campus-switcher-icon,.campus-app.dark-theme .sidebar-prompt,.campus-app.dark-theme .campus-card,.campus-app.dark-theme .issue-card,.campus-app.dark-theme .profile-card,.campus-app.dark-theme .activity-list,.campus-app.dark-theme .activity-item,.campus-app.dark-theme .campus-menu,.campus-app.dark-theme .search-wrap,.campus-app.dark-theme .category-chips button,.campus-app.dark-theme .report-dialog,.campus-app.dark-theme .issue-detail-dialog,.campus-app.dark-theme .auth-dialog { border-color: var(--border); background: #1d1923; color: var(--ink); }
-.campus-app.dark-theme .welcome-art { background: linear-gradient(180deg, #302539, #242b36); }
-.campus-app.dark-theme .ground-back { background: #51405a; }
-.campus-app.dark-theme .ground-front { background: #394c50; }
-.campus-app.dark-theme .art-note { border-color: #51445a; background: #241e2be8; color: var(--ink); }
-.campus-app.dark-theme .art-note span,.campus-app.dark-theme .prompt-icon,.campus-app.dark-theme .activity-icon,.campus-app.dark-theme .empty-icon { background: #382235; color: #f06a82; }
+.campus-app.dark-theme .welcome-art { background: linear-gradient(180deg, #2b2527, #242426); }
+.campus-app.dark-theme .ground-back { background: #504447; }
+.campus-app.dark-theme .ground-front { background: #3d4946; }
+.campus-app.dark-theme .art-note { border-color: #4b3b3d; background: #241f20e8; color: var(--ink); }
+.campus-app.dark-theme .art-note span,.campus-app.dark-theme .prompt-icon,.campus-app.dark-theme .activity-icon,.campus-app.dark-theme .empty-icon { background: #392326; color: #f06478; }
+.campus-app.dark-theme .heat-placeholder.is-hot { border-color: #8b74d1; color: #c4b5fd; background: #30264b; }
 .campus-app.dark-theme .brand-symbol,.campus-app.dark-theme .sidebar-report,.campus-app.dark-theme .button-primary,.campus-app.dark-theme .mobile-report-button > span { background: var(--accent-gradient); }
-.campus-app.dark-theme .brand-hot,.campus-app.dark-theme .flame-count,.campus-app.dark-theme .text-button,.campus-app.dark-theme .campus-card-link,.campus-app.dark-theme .theme-toggle:hover { color: #d95ae0; }
-.campus-app.dark-theme .category-chips button:hover,.campus-app.dark-theme .category-chips button.chosen { border-color: #a54392; color: #ffd8f3; background: linear-gradient(110deg, #542033, #43234d); }
-.campus-app.dark-theme .side-link.active { background: #32202f; color: #e875af; }
+.campus-app.dark-theme .brand-hot,.campus-app.dark-theme .flame-count,.campus-app.dark-theme .text-button,.campus-app.dark-theme .campus-card-link,.campus-app.dark-theme .theme-toggle:hover { color: #f06478; }
+.campus-app.dark-theme .category-chips button:hover,.campus-app.dark-theme .category-chips button.chosen { border-color: #a83b4b; color: #ffe1e5; background: linear-gradient(110deg, #48202b, #382029); }
+.campus-app.dark-theme .side-link.active { background: #322027; color: #f06478; }
 .campus-app.dark-theme .side-link:hover,.campus-app.dark-theme .icon-button:hover,.campus-app.dark-theme .campus-menu button:hover,.campus-app.dark-theme .campus-menu button[aria-selected='true'],.campus-app.dark-theme .activity-item:hover,.campus-app.dark-theme .activity-item.unread { background: #28232e; }
 .campus-app.dark-theme .mobile-campus,.campus-app.dark-theme .sign-in-button,.campus-app.dark-theme .desktop-report-inline,.campus-app.dark-theme .button-secondary,.campus-app.dark-theme .form-field input,.campus-app.dark-theme .form-field select,.campus-app.dark-theme .form-field textarea,.campus-app.dark-theme .comment-form { border-color: var(--border); background: #211d28; color: var(--ink); }
 .campus-app.dark-theme .mobile-nav > button,.campus-app.dark-theme .mobile-campus,.campus-app.dark-theme .side-link,.campus-app.dark-theme .feed-tabs button,.campus-app.dark-theme .category-chips button,.campus-app.dark-theme .issue-source,.campus-app.dark-theme .issue-location-row,.campus-app.dark-theme .action-button,.campus-app.dark-theme .feed-heading p,.campus-app.dark-theme .feed-footer,.campus-app.dark-theme .page-heading p,.campus-app.dark-theme .profile-card p,.campus-app.dark-theme .activity-copy span,.campus-app.dark-theme .campus-menu small,.campus-app.dark-theme .detail-description,.campus-app.dark-theme .auth-subtitle { color: #b6acbf; }
-.campus-app.dark-theme .mobile-nav > button.active,.campus-app.dark-theme .feed-tabs button.selected,.campus-app.dark-theme .action-button:hover,.campus-app.dark-theme .action-button.is-active,.campus-app.dark-theme .issue-card-title:hover h2 { color: #dc68e0; }
+.campus-app.dark-theme .mobile-nav > button.active,.campus-app.dark-theme .feed-tabs button.selected,.campus-app.dark-theme .action-button:hover,.campus-app.dark-theme .action-button.is-active,.campus-app.dark-theme .issue-card-title:hover h2 { color: #f06478; }
 .campus-app.dark-theme .issue-card-excerpt,.campus-app.dark-theme .issue-excerpt { color: #b6acbf; }
 .campus-app.dark-theme .issue-card-actions,.campus-app.dark-theme .detail-action-row,.campus-app.dark-theme .activity-item,.campus-app.dark-theme .dialog-topbar,.campus-app.dark-theme .dialog-actions,.campus-app.dark-theme .comment-form-foot { border-color: #342d3b; }
 .campus-app.dark-theme .form-field > span:first-child,.campus-app.dark-theme .upload-label,.campus-app.dark-theme .checkbox-row strong,.campus-app.dark-theme .upload-trigger strong,.campus-app.dark-theme .detail-meta strong,.campus-app.dark-theme .department-note strong { color: #e7dfea; }
 .campus-app.dark-theme .upload-trigger { border-color: #504556; color: #c4b9ca; background: #211d28; }
 .campus-app.dark-theme .privacy-note,.campus-app.dark-theme .sign-in-prompt,.campus-app.dark-theme .empty-state,.campus-app.dark-theme .comment-form { border-color: #3b3342; background: #211d28; color: #d4cad9; }
 .campus-app.dark-theme .count-pill { color: #d5c8dc; background: #302a37; }
-.campus-app.dark-theme .toast-message { border-color: #49354b; color: #f2c4e6; background: #2b2032; }
-.campus-app.dark-theme button:focus-visible,.campus-app.dark-theme a:focus-visible,.campus-app.dark-theme input:focus-visible,.campus-app.dark-theme select:focus-visible,.campus-app.dark-theme textarea:focus-visible { outline-color: #d54fb8; }
+.campus-app.dark-theme .toast-message { border-color: #493038; color: #f4c8d0; background: #2b2025; }
+.campus-app.dark-theme button:focus-visible,.campus-app.dark-theme a:focus-visible,.campus-app.dark-theme input:focus-visible,.campus-app.dark-theme select:focus-visible,.campus-app.dark-theme textarea:focus-visible { outline-color: #f06478; }
 @media (max-width: 720px) {
   .mobile-theme-toggle { display: grid; color: #748078; }
   .sidebar-theme-toggle { display: none; }
-  .campus-app.dark-theme .mobile-theme-toggle { color: #e68cce; }
+  .campus-app.dark-theme .mobile-theme-toggle { color: #f06478; }
   html:has(.campus-app.dark-theme),body:has(.campus-app.dark-theme) { background: #131018; color-scheme: dark; }
 }
 @media (min-width: 721px) {

@@ -27,6 +27,7 @@ export function IssueCard({ issue, userId, busy, onOpen, onVote, onAffected, onF
     ? supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
     : `https://images.unsplash.com/${CATEGORY_IMAGES[issue.category?.name ?? 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
   const upVotes = issue.votes?.filter((vote) => vote.value === 1).length ?? 0
+  const isHotIssue = upVotes >= 10
   const downVotes = issue.votes?.filter((vote) => vote.value === -1).length ?? 0
   const hasVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === 1))
   const hasDownVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === -1))
@@ -37,7 +38,7 @@ export function IssueCard({ issue, userId, busy, onOpen, onVote, onAffected, onF
 
   return (
     <article className="issue-card">
-      <div className="issue-card-head"><div className="issue-source"><span className="category-mark">{category.slice(0, 1)}</span><span>{category}</span><span className="source-dot" aria-hidden="true">·</span><time dateTime={issue.created_at}>{relativeTime(issue.created_at)}</time></div><span className="heat-placeholder" title="Heat scoring is coming later"><Flame size={13} /> Heat soon</span><button className="icon-button quiet-icon" type="button" aria-label={`More about ${issue.title}`} onClick={() => onOpen(issue)}><MoreHorizontal size={19} /></button></div>
+      <div className="issue-card-head"><div className="issue-source"><span className="category-mark">{category.slice(0, 1)}</span><span>{category}</span><span className="source-dot" aria-hidden="true">·</span><time dateTime={issue.created_at}>{relativeTime(issue.created_at)}</time></div>{isHotIssue && <span className="heat-placeholder is-hot" title="This issue has 10 or more upvotes" aria-label="Popular issue: 10 or more upvotes"><Flame size={13} fill="currentColor" /> Popular</span>}<button className="icon-button quiet-icon" type="button" aria-label={`More about ${issue.title}`} onClick={() => onOpen(issue)}><MoreHorizontal size={19} /></button></div>
       <button className="issue-card-title" type="button" onClick={() => onOpen(issue)}><h2>{issue.title}</h2></button>
       <p className="issue-excerpt">{issue.description}</p>
       <button className="issue-photo-wrap" type="button" onClick={() => onOpen(issue)} aria-label={`Open issue: ${issue.title}`}><img src={photo} alt={`${category} at ${issue.location?.name ?? 'campus'}`} className="issue-photo" /><span className={`status-pill ${statusStyles[issue.status] ?? 'status-reported'}`}><span className="status-dot" />{STATUS_LABELS[issue.status]}</span></button>
