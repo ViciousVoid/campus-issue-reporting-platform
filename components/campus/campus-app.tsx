@@ -330,19 +330,25 @@ export function CampusApp() {
   async function castVote(issue: CampusIssue, value: 1 | -1) {
     if (!await requireUser()) return
     setBusy(true)
-    const existing = issue.votes.find((vote) => vote.user_id === userId)
-    let error
-    if (existing?.value === value) {
-      ;({ error } = await supabase.from('votes').delete().eq('issue_id', issue.id).eq('user_id', userId!))
-    } else {
-      ;({ error } = await supabase.from('votes').upsert({ issue_id: issue.id, user_id: userId!, value }, { onConflict: 'issue_id,user_id' }))
-    }
-    setBusy(false)
-    if (error) setNotice('Could not save your vote. Please try again.')
-    else {
-      await refreshIssues()
+    try {
+      const existing = issue.votes?.find((vote) => vote.user_id === userId)
+      const result = existing?.value === value
+        ? await supabase.from('votes').delete().eq('issue_id', issue.id).eq('user_id', userId!)
+        : await supabase.from('votes').upsert({ issue_id: issue.id, user_id: userId!, value }, { onConflict: 'issue_id,user_id' })
+      if (result.error) {
+        setNotice('Could not save your vote. Please try again.')
+        return
+      }
+      setNotice('Vote saved.')
       evaluateEscalation(issue.id)
-      await mutate(['my-vote', issue.id, userId])
+      void Promise.all([refreshIssues(), mutate(['my-vote', issue.id, userId])]).catch(() => {
+        setNotice('Your vote was saved, but the displayed totals may take a moment to refresh.')
+      })
+    } catch {
+      setNotice('Could not save your vote. Please try again.')
+    } finally {
+      setBusy(false)
+      window.setTimeout(() => setNotice(''), 3200)
     }
   }
 
@@ -491,7 +497,7 @@ export function CampusApp() {
 }
 
 function MapLegend() {
-  return <div className="map-legend" aria-label="Problem severity colors"><span><i className="severity-low" />Low</span><span><i className="severity-medium" />Medium</span><span><i className="severity-high" />High</span><span><i className="severity-critical" />Critical</span></div>
+  return <div className="map-legend" aria-label="Map pin colors: severity and vote totals"><span><i className="severity-low" />Low</span><span><i className="severity-medium" />Medium</span><span><i className="severity-high" />High</span><span><i className="severity-critical" />Critical</span><span><i className="vote-heat-ember" />16–39 upvotes</span><span><i className="vote-heat-purple" />41+ upvotes</span></div>
 }
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {

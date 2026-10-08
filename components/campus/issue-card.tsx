@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowDown, ArrowUp, Camera, Flame, MapPin, MessageCircle } from 'lucide-react'
-import { CATEGORY_IMAGES, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
+import { CATEGORY_IMAGES, getDisplayedVoteCounts, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { getHeatLevel, getIssueRecurrenceCount, HEAT_LABELS, scoreIssueHeat, type HeatLevel, type HeatThresholds } from '@/lib/campus-heat'
 import { createClient } from '@/lib/supabase/client'
 
@@ -26,12 +26,11 @@ export function IssueCard({ issue, issues = [], thresholds, userId, busy, onOpen
   const photo = photos[0]
     ? supabase.storage.from('issue-photos').getPublicUrl(photos[0].storage_path).data.publicUrl
     : `https://images.unsplash.com/${CATEGORY_IMAGES[issue.custom_category || issue.category?.name || 'Other'] ?? CATEGORY_IMAGES.Other}?auto=format&fit=crop&w=960&q=82`
-  const upVotes = issue.developer_upvote_override ?? issue.votes?.filter((vote) => vote.value === 1).length ?? 0
+  const { upvotes: upVotes, downvotes: downVotes } = getDisplayedVoteCounts(issue)
   const heatScore = scoreIssueHeat(issue, getIssueRecurrenceCount(issue, issues))
   const heatLevel: HeatLevel = getHeatLevel(heatScore, thresholds)
   const showHeatLevel = heatLevel !== 'normal'
   const flameBorder = upVotes > 40 ? 'issue-card-flame-purple-magenta' : upVotes > 15 && upVotes < 40 ? 'issue-card-flame-ember' : ''
-  const downVotes = issue.developer_downvote_override ?? issue.votes?.filter((vote) => vote.value === -1).length ?? 0
   const hasVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === 1))
   const hasDownVoted = Boolean(userId && issue.votes?.some((vote) => vote.user_id === userId && vote.value === -1))
   const comments = issue.comments?.length ?? 0

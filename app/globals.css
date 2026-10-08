@@ -702,7 +702,10 @@ button.admin-stat-card { cursor: pointer; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 7px 11px; margin-top: 10px; color: var(--muted-foreground); font-size: 8px; }
 .map-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .map-legend i { width: 7px; height: 7px; border-radius: 50%; }
-.severity-low { background: #3b9b67; }.severity-medium { background: #d6a21f; }.severity-high { background: #ed7140; }.severity-critical { background: #c33b46; }
+  .severity-low { background: #3b9b67; }.severity-medium { background: #d6a21f; }.severity-high { background: #ed7140; }.severity-critical { background: #c33b46; }
+  .vote-heat-ember { background: linear-gradient(135deg,#fff079 0%,#ffb52e 28%,#ff7040 56%,#e63353 78%,#fff079 100%); }
+  .vote-heat-purple { background: linear-gradient(135deg,#7b2cff 0%,#a83dff 28%,#ed40c7 52%,#c026d3 76%,#7b2cff 100%); }
+
 .campus-map-caption { margin: 8px 0 0; color: var(--muted-foreground); font-size: 8px; line-height: 1.5; }
 .report-location-picker { display: grid; gap: 9px; margin: 2px 0 5px; padding: 11px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--soft) 55%, var(--card)); }
 .location-picker-heading { display: flex; align-items: center; justify-content: space-between; gap: 9px; }

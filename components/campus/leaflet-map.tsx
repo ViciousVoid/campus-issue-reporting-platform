@@ -4,16 +4,37 @@ import { useEffect, useMemo, useState } from 'react'
 import { Crosshair, LoaderCircle } from 'lucide-react'
 import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { divIcon, latLngBounds, type LatLngExpression } from 'leaflet'
-import type { CampusIssue } from '@/lib/campus'
+import { getDisplayedVoteCounts, type CampusIssue } from '@/lib/campus'
 
 export type Coordinates = { latitude: number; longitude: number }
 
 const DEFAULT_CENTER: LatLngExpression = [20.5937, 78.9629]
-const SEVERITY_COLORS: Record<string, string> = {
+const PIN_COLORS = {
   low: '#3b9b67',
   medium: '#d6a21f',
   high: '#ed7140',
   critical: '#c33b46',
+  ember: 'linear-gradient(135deg, #fff079 0%, #ffb52e 28%, #ff7040 56%, #e63353 78%, #fff079 100%)',
+  purple: 'linear-gradient(135deg, #7b2cff 0%, #a83dff 28%, #ed40c7 52%, #c026d3 76%, #7b2cff 100%)',
+} as const
+
+type PinTone = keyof typeof PIN_COLORS
+
+function getPinTone(issue: CampusIssue): PinTone {
+  const { upvotes } = getDisplayedVoteCounts(issue)
+  if (upvotes > 40) return 'purple'
+  if (upvotes > 15 && upvotes < 40) return 'ember'
+  return issue.severity && issue.severity in PIN_COLORS ? issue.severity as PinTone : 'medium'
+}
+
+function createPinIcons(focused: boolean) {
+  return Object.fromEntries(Object.entries(PIN_COLORS).map(([tone, color]) => [tone, divIcon({
+    className: `campus-map-marker-shell${focused ? ' is-focused' : ''}`,
+    html: `<span class="campus-map-marker" style="--marker-color:${color}"><span></span></span>`,
+    iconSize: focused ? [38, 46] : [30, 38],
+    iconAnchor: focused ? [19, 42] : [15, 34],
+    popupAnchor: focused ? [0, -38] : [0, -32],
+  })])) as Record<PinTone, ReturnType<typeof divIcon>>
 }
 
 function MapSizeWatcher() {
@@ -86,20 +107,8 @@ export function CampusIssueMap({ issues, onSelectIssue, initialCenter, focusedIs
   const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(null)
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState(false)
-  const icons = useMemo(() => Object.fromEntries(Object.entries(SEVERITY_COLORS).map(([severity, color]) => [severity, divIcon({
-    className: 'campus-map-marker-shell',
-    html: `<span class="campus-map-marker" style="--marker-color:${color}"><span></span></span>`,
-    iconSize: [30, 38],
-    iconAnchor: [15, 34],
-    popupAnchor: [0, -32],
-  })])), [])
-  const focusedIcons = useMemo(() => Object.fromEntries(Object.entries(SEVERITY_COLORS).map(([severity, color]) => [severity, divIcon({
-    className: 'campus-map-marker-shell is-focused',
-    html: `<span class="campus-map-marker" style="--marker-color:${color}"><span></span></span>`,
-    iconSize: [38, 46],
-    iconAnchor: [19, 42],
-    popupAnchor: [0, -38],
-  })])), [])
+  const icons = useMemo(() => createPinIcons(false), [])
+  const focusedIcons = useMemo(() => createPinIcons(true), [])
 
   function centerOnCurrentLocation() {
     if (!navigator.geolocation) {
@@ -132,20 +141,22 @@ export function CampusIssueMap({ issues, onSelectIssue, initialCenter, focusedIs
       <FocusIssue issue={focusedIssue} />
       {located.map((issue) => {
         const severity = issue.severity ?? 'medium'
-        const color = SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.medium
+        const color = PIN_COLORS[severity in PIN_COLORS ? severity as PinTone : 'medium']
+        const { upvotes } = getDisplayedVoteCounts(issue)
+        const tone = getPinTone(issue)
         return (
           <Marker
             key={issue.id}
             position={[issue.latitude!, issue.longitude!]}
-            icon={issue.id === focusedIssueId ? focusedIcons[severity] ?? focusedIcons.medium : icons[severity] ?? icons.medium}
-            title={`${severity} issue: ${issue.title}`}
+            icon={issue.id === focusedIssueId ? focusedIcons[tone] : icons[tone]}
+            title={`${severity} severity issue: ${issue.title}; ${upvotes} upvotes`}
             alt={`${severity} severity issue`}
             eventHandlers={{ click: () => onSelectIssue(issue.id) }}
           >
             <Popup>
               <div className="campus-map-popup">
                 <strong>{issue.title}</strong>
-                <span style={{ color }}>{severity} severity</span>
+                <span style={{ color }}>{severity} severity · {upvotes} upvotes</span>
                 <button type="button" onClick={() => onSelectIssue(issue.id)}>View report</button>
               </div>
             </Popup>

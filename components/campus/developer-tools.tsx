@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import useSWR, { mutate } from 'swr'
 import { ArrowDown, ArrowUp, LoaderCircle, ShieldCheck, Trash2, Undo2, Wrench } from 'lucide-react'
+import { getDisplayedVoteCounts } from '@/lib/campus'
 type DeveloperIssue = {
   id: string
   title: string
@@ -34,9 +35,9 @@ export function DeveloperTools({ campusId }: { campusId: string }) {
   useEffect(() => {
     if (!selected) return
     setSelectedId(selected.id)
-    setUpvotes(String(selected.developer_upvote_override ?? actualUpvotes))
-    setDownvotes(String(selected.developer_downvote_override ?? actualDownvotes))
-  }, [actualDownvotes, actualUpvotes, selected])
+    setUpvotes(String(selected.developer_upvote_override ?? 0))
+    setDownvotes(String(selected.developer_downvote_override ?? 0))
+  }, [selected?.id, selected?.developer_upvote_override, selected?.developer_downvote_override])
 
   async function save(action: 'set_vote_counts' | 'reset_vote_counts' | 'delete_issue') {
     if (!selected) return
@@ -66,7 +67,7 @@ export function DeveloperTools({ campusId }: { campusId: string }) {
 
   return (
     <section className="content-page developer-page">
-      <div className="page-heading"><span className="eyebrow">ADMIN-ONLY SANDBOX</span><h1>Developer options</h1><p>Test report states and interface counts without changing real community votes.</p></div>
+      <div className="page-heading"><span className="eyebrow">ADMIN-ONLY SANDBOX</span><h1>Developer options</h1><p>Test report states and vote heat. Baseline counts are added to real community votes.</p></div>
       <div className="developer-security-note"><ShieldCheck size={17} /><span>Protected by a server-side campus administrator check. Changes apply only to this campus.</span></div>
       {isLoading ? <div className="loading-state"><LoaderCircle size={20} className="spin" /><span>Loading campus reports…</span></div> : error ? <div className="empty-state" role="alert"><h3>Couldn&apos;t load developer controls</h3><p>{error.message}</p></div> : issues.length === 0 ? <div className="empty-state"><Wrench size={20} /><h3>No reports to test yet</h3><p>Campus reports will appear here when they&apos;re available.</p></div> : (
         <div className="developer-panel">
@@ -74,8 +75,8 @@ export function DeveloperTools({ campusId }: { campusId: string }) {
           {selected && <>
             <div className="developer-selected-meta"><span>{selected.severity ?? 'medium'} severity</span><time dateTime={selected.created_at}>{new Date(selected.created_at).toLocaleString()}</time></div>
             <div className="developer-count-grid">
-              <label><span>Upvotes to display</span><div><ArrowUp size={16} /><input type="number" min="0" max="1000000" step="1" value={upvotes} onChange={(event) => setUpvotes(event.target.value)} /></div><small>Actual: {actualUpvotes}{selected.developer_upvote_override !== null ? ' · override active' : ''}</small></label>
-              <label><span>Downvotes to display</span><div><ArrowDown size={16} /><input type="number" min="0" max="1000000" step="1" value={downvotes} onChange={(event) => setDownvotes(event.target.value)} /></div><small>Actual: {actualDownvotes}{selected.developer_downvote_override !== null ? ' · override active' : ''}</small></label>
+              <label><span>Upvote baseline</span><div><ArrowUp size={16} /><input type="number" min="0" max="1000000" step="1" value={upvotes} onChange={(event) => setUpvotes(event.target.value)} /></div><small>Live votes: {actualUpvotes} · Displayed: {getDisplayedVoteCounts(selected).upvotes}</small></label>
+              <label><span>Downvote baseline</span><div><ArrowDown size={16} /><input type="number" min="0" max="1000000" step="1" value={downvotes} onChange={(event) => setDownvotes(event.target.value)} /></div><small>Live votes: {actualDownvotes} · Displayed: {getDisplayedVoteCounts(selected).downvotes}</small></label>
             </div>
             <div className="developer-actions"><button type="button" className="button-primary small" disabled={busy || !upvotes.trim() || !downvotes.trim() || !Number.isInteger(Number(upvotes)) || !Number.isInteger(Number(downvotes)) || Number(upvotes) < 0 || Number(downvotes) < 0 || Number(upvotes) > 1000000 || Number(downvotes) > 1000000} onClick={() => void save('set_vote_counts')}>{busy ? <LoaderCircle size={15} className="spin" /> : <Wrench size={15} />}Save test counts</button><button type="button" className="button-secondary" disabled={busy || (selected.developer_upvote_override === null && selected.developer_downvote_override === null)} onClick={() => void save('reset_vote_counts')}><Undo2 size={15} /> Restore real counts</button></div>
             <div className="developer-delete-row"><div><strong>Remove this report</strong><span>Deletes this report and its related comments, votes, and updates.</span></div><button type="button" className="developer-delete-button" disabled={busy} onClick={() => void save('delete_issue')}><Trash2 size={15} />Delete report</button></div>

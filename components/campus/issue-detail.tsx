@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent as ReactKeyboar
 import useSWR, { mutate } from 'swr'
 import { ArrowDown, ArrowUp, Check, Clock3, LoaderCircle, MapPin, MessageCircle, Pencil, Save, Send, Trash2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { STATUS_LABELS, type CampusIssue } from '@/lib/campus'
+import { getDisplayedVoteCounts, STATUS_LABELS, type CampusIssue } from '@/lib/campus'
 import { relativeTime, statusStyles } from '@/components/campus/issue-card'
 import { IssuePhotoGallery } from '@/components/campus/issue-photo-gallery'
 
@@ -65,9 +65,9 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   }, [onClose])
 
   useEffect(() => {
-    setAdminUpvotes(String(issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length))
-    setAdminDownvotes(String(issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length))
-  }, [issue])
+    setAdminUpvotes(String(issue.developer_upvote_override ?? 0))
+    setAdminDownvotes(String(issue.developer_downvote_override ?? 0))
+  }, [issue.id, issue.developer_upvote_override, issue.developer_downvote_override])
   const { data: comments = [], isLoading } = useSWR(['comments', issue.id], async ([, id]) => {
     const { data, error } = await supabase.from('comments').select('id,issue_id,user_id,parent_id,body,created_at,author:profiles(display_name)').eq('issue_id', id).order('created_at', { ascending: true })
     if (error) throw error
@@ -91,8 +91,7 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
   })
   const parentComments = comments.filter((comment) => !comment.parent_id)
   const repliesFor = (parentId: string) => comments.filter((comment) => comment.parent_id === parentId)
-  const upVotes = issue.developer_upvote_override ?? issue.votes.filter((vote) => vote.value === 1).length
-  const downVotes = issue.developer_downvote_override ?? issue.votes.filter((vote) => vote.value === -1).length
+  const { upvotes: upVotes, downvotes: downVotes } = getDisplayedVoteCounts(issue)
 
   async function submitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -201,7 +200,7 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error ?? 'The displayed vote totals could not be updated.')
-      await onAdminChange(false, 'Displayed vote totals updated.')
+      await onAdminChange(false, 'Vote display baseline updated.')
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : 'The displayed vote totals could not be updated.')
     } finally {
@@ -247,11 +246,11 @@ export function IssueDetail({ issue, userId, onClose, onShowOnMap, onPhotosChang
                 <label className="form-field"><span>Post description</span><textarea required minLength={20} maxLength={5000} rows={5} value={adminDescription} onChange={(event) => setAdminDescription(event.target.value)} /></label>
                 <div className="issue-admin-actions"><button type="button" className="button-secondary" disabled={adminBusy} onClick={() => setAdminEditing(false)}>Cancel</button><button type="submit" className="button-primary small" disabled={adminBusy || adminTitle.trim().length < 8 || adminDescription.trim().length < 20}>{adminBusy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />} Save changes</button></div>
               </form>}
-              <section className="issue-admin-vote-controls" aria-label="Set displayed vote totals">
-                <div><strong>Displayed vote totals</strong><p>Adjust the counts shown on this post without changing community votes.</p></div>
+              <section className="issue-admin-vote-controls" aria-label="Set vote display baselines">
+                <div><strong>Vote display baselines</strong><p>Set starting totals for heat testing. Live community votes are added on top.</p></div>
                 <div className="issue-admin-vote-grid">
-                  <label>Upvotes<input type="number" min="0" max="1000000" step="1" value={adminUpvotes} onChange={(event) => setAdminUpvotes(event.target.value)} /></label>
-                  <label>Downvotes<input type="number" min="0" max="1000000" step="1" value={adminDownvotes} onChange={(event) => setAdminDownvotes(event.target.value)} /></label>
+                  <label>Upvote baseline<input type="number" min="0" max="1000000" step="1" value={adminUpvotes} onChange={(event) => setAdminUpvotes(event.target.value)} /></label>
+                  <label>Downvote baseline<input type="number" min="0" max="1000000" step="1" value={adminDownvotes} onChange={(event) => setAdminDownvotes(event.target.value)} /></label>
                 </div>
                 <button type="button" className="button-primary small" disabled={adminBusy || !adminUpvotes.trim() || !adminDownvotes.trim() || !Number.isInteger(Number(adminUpvotes)) || !Number.isInteger(Number(adminDownvotes)) || Number(adminUpvotes) < 0 || Number(adminDownvotes) < 0 || Number(adminUpvotes) > 1000000 || Number(adminDownvotes) > 1000000} onClick={() => void saveVoteCounts()}>{adminBusy ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}Save vote totals</button>
               </section>

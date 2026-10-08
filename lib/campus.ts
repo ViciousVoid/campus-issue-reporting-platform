@@ -54,6 +54,16 @@ export type CampusIssue = {
   comments: { id: string; created_at?: string }[]
 }
 
+type VoteCountSource = Pick<CampusIssue, 'developer_upvote_override' | 'developer_downvote_override'> & { votes?: { value: number }[] }
+
+export function getDisplayedVoteCounts(issue: VoteCountSource) {
+  const votes = issue.votes ?? []
+  return {
+    upvotes: (issue.developer_upvote_override ?? 0) + votes.filter((vote) => vote.value === 1).length,
+    downvotes: (issue.developer_downvote_override ?? 0) + votes.filter((vote) => vote.value === -1).length,
+  }
+}
+
 export type IssueStatus =
   | 'reported'
   | 'verified'
