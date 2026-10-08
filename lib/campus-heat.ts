@@ -24,7 +24,12 @@ export function scoreIssueHeat(issue: CampusIssue, recurrenceCount = 0, now = Da
   const affectedScore = (issue.affected_users?.length ?? 0) * 3
   const severityScore: Record<string, number> = { low: 0, medium: 8, high: 18, critical: 32 }
   const severity = severityScore[issue.severity ?? 'medium'] ?? 8
-  const updatedHours = Math.max(0, (now - new Date(issue.updated_at || issue.created_at).getTime()) / 3_600_000)
+  const latestCommentAt = issue.comments?.reduce((latest, comment) => {
+    const commentAt = comment.created_at ? new Date(comment.created_at).getTime() : 0
+    return Math.max(latest, commentAt)
+  }, 0) ?? 0
+  const latestActivityAt = Math.max(new Date(issue.updated_at || issue.created_at).getTime(), latestCommentAt)
+  const updatedHours = Math.max(0, (now - latestActivityAt) / 3_600_000)
   const recentActivity = updatedHours < 24 ? 18 : updatedHours < 168 ? 10 : updatedHours < 720 ? 4 : 0
   const unresolvedDays = issue.status === 'resolved' ? 0 : Math.max(0, (now - new Date(issue.created_at).getTime()) / 86_400_000)
   const unresolvedScore = Math.min(28, unresolvedDays * 1.4)

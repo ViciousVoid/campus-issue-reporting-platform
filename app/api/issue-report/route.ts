@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     await admin.from('issue_events').insert({ issue_id: created.id, actor_id: authData.user.id, event_type: 'duplicate_suggested', new_value: duplicateId, message: 'Reporter linked a possible duplicate issue.', is_official: false })
   }
   if (reviewWrite.error || eventWrite.error) {
-    return Response.json({ id: created.id, moderationStatus: moderation.outcome === 'approved' ? 'approved' : 'pending', warning: 'Your report is saved, but its audit entry could not be recorded.' }, { status: 201 })
+    return Response.json({ id: created.id, moderationStatus: moderation.outcome === 'approved' ? 'approved' : moderation.outcome === 'rejected' ? 'rejected' : 'pending', warning: 'Your report is saved, but its audit entry could not be recorded.' }, { status: 201 })
   }
   return Response.json({ id: created.id, moderationStatus: moderation.outcome === 'approved' ? 'approved' : moderation.outcome === 'rejected' ? 'rejected' : 'pending' }, { status: 201 })
 }

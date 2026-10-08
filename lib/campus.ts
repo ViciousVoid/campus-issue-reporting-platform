@@ -26,6 +26,19 @@ export type CampusIssue = {
   faculty_tag: string | null
   anonymous_public: boolean
   status: IssueStatus
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  moderation_status?: 'approved' | 'pending' | 'rejected'
+  moderation_reason?: string | null
+  duplicate_of?: string | null
+  custom_category?: string | null
+  custom_location?: string | null
+  custom_department?: string | null
+  problem_type?: string | null
+  assigned_to?: string | null
+  resolved_at?: string | null
+  resolution_verification?: 'fixed' | 'still_a_problem' | 'merged' | null
+  ai_summary?: string | null
+  ai_summary_updated_at?: string | null
   created_at: string
   updated_at: string
   category: { name: string; icon: string; color: string } | null
@@ -36,7 +49,7 @@ export type CampusIssue = {
   votes: { value: number; user_id: string }[]
   affected_users: { user_id: string }[]
   followers: { user_id: string }[]
-  comments: { id: string }[]
+  comments: { id: string; created_at?: string }[]
 }
 
 export type IssueStatus =
@@ -47,7 +60,7 @@ export type IssueStatus =
   | 'resolved'
   | 'reopened'
 
-export type AppView = 'home' | 'explore' | 'activity' | 'profile'
+export type AppView = 'home' | 'explore' | 'activity' | 'profile' | 'moderator'
 
 export const ISSUE_STATUSES: IssueStatus[] = [
   'reported',

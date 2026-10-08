@@ -7,11 +7,14 @@ import { DEFAULT_HEAT_THRESHOLDS, getHeatLevel, getHeatThresholds, getIssueRecur
 import { statusStyles } from '@/components/campus/issue-card'
 
 type Option = { id: string; name: string; building?: string | null }
+type ModeratorOption = { user_id: string; role: string; display_name: string }
 type Props = {
+  campusId: string
   issues: CampusIssue[]
   categories: Category[]
   locations: Option[]
   departments: Option[]
+  moderators: ModeratorOption[]
   thresholds: HeatThresholds
   onOpenIssue: (issueId: string) => void
   onChanged: () => void | Promise<void>
@@ -36,7 +39,7 @@ function topCounts(issues: CampusIssue[], labelFor: (issue: CampusIssue) => stri
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
 }
 
-export function ModeratorDashboard({ issues, categories, locations, departments, thresholds, onOpenIssue, onChanged, isAdmin }: Props) {
+export function ModeratorDashboard({ campusId, issues, categories, locations, departments, moderators, thresholds, onOpenIssue, onChanged, isAdmin }: Props) {
   const [filter, setFilter] = useState<'active' | 'moderation' | 'all'>('active')
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({})
   const [draftThresholds, setDraftThresholds] = useState<HeatThresholds>(thresholds ?? DEFAULT_HEAT_THRESHOLDS)
@@ -75,7 +78,7 @@ export function ModeratorDashboard({ issues, categories, locations, departments,
     setError('')
     setNotice('')
     try {
-      await runWorkflow({ action: 'update_heat_settings', campusId: issues[0]?.campus_id, thresholds: draftThresholds })
+      await runWorkflow({ action: 'update_heat_settings', campusId, thresholds: draftThresholds })
       setNotice('Heat thresholds updated.')
       await onChanged()
     } catch (nextError) {
@@ -114,6 +117,7 @@ export function ModeratorDashboard({ issues, categories, locations, departments,
             <div className="admin-controls-grid">
               <label><span>Status</span><select value={issue.status} disabled={busyId === issue.id} onChange={(event) => void act(issue.id, { action: 'set_status', status: event.target.value as IssueStatus, departmentId: issue.department_id ?? null }, 'Issue status updated.')}>{statuses.map((status) => <option value={status} key={status}>{status.replace('_', ' ')}</option>)}</select></label>
               <label><span>Department assignment</span><select value={issue.department_id ?? ''} disabled={busyId === issue.id} onChange={(event) => void act(issue.id, { action: 'set_status', status: issue.status, departmentId: event.target.value || null }, 'Department assignment updated.')}><option value="">Unassigned</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
+              <label><span>Assign moderator</span><select value={issue.assigned_to ?? ''} disabled={busyId === issue.id} onChange={(event) => void act(issue.id, { action: 'set_status', status: issue.status, departmentId: issue.department_id ?? null, assignedTo: event.target.value || null }, 'Issue assignee updated.')}><option value="">Unassigned</option>{moderators.map((moderator) => <option key={moderator.user_id} value={moderator.user_id}>{moderator.display_name}{moderator.role === 'admin' ? ' · admin' : ''}</option>)}</select></label>
               {issue.duplicate_of ? <div className="merged-note">Linked as duplicate</div> : <label><span>Merge duplicate into</span><span className="merge-control"><select value={mergeTarget} onChange={(event) => setMergeTargets((current) => ({ ...current, [issue.id]: event.target.value }))}><option value="">Choose canonical issue</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}</select><button className="button-secondary small" disabled={!mergeTarget || busyId === issue.id} onClick={() => void act(issue.id, { action: 'merge_duplicate', targetIssueId: mergeTarget }, 'Duplicate linked to the canonical report.')}>Merge</button></span></label>}
             </div>
           </article>

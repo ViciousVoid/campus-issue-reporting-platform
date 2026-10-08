@@ -18,9 +18,11 @@ import { IssueCard } from '@/components/campus/issue-card'
 import { IssueDetail } from '@/components/campus/issue-detail'
 import { ReportDialog } from '@/components/campus/report-dialog'
 import { AuthDialog } from '@/components/campus/auth-dialog'
+import { ModeratorDashboard } from '@/components/campus/moderator-dashboard'
+import { DEFAULT_HEAT_THRESHOLDS, getHeatThresholds, type HeatThresholds } from '@/lib/campus-heat'
 
 const supabase = createClient()
-const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id)'
+const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,ai_summary,ai_summary_updated_at,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
@@ -99,6 +101,28 @@ export function CampusApp() {
     if (error) throw error
     return data ?? []
   })
+  const { data: moderatorMembership } = useSWR(userId && campusId ? ['campus-moderator', userId, campusId] : null, async ([, uid, cid]) => {
+    const { data, error } = await supabase.from('campus_moderators').select('role').eq('user_id', uid).eq('campus_id', cid).maybeSingle()
+    if (error) return null
+    return data as { role: string } | null
+  })
+  const { data: heatSettings } = useSWR(campusId ? ['issue-heat-settings', campusId] : null, async ([, cid]) => {
+    const { data, error } = await supabase.from('issue_heat_settings').select('thresholds').eq('campus_id', cid).maybeSingle()
+    if (error) return null
+    return data as { thresholds: unknown } | null
+  })
+  const thresholds: HeatThresholds = getHeatThresholds(heatSettings?.thresholds ?? DEFAULT_HEAT_THRESHOLDS)
+  const isModerator = moderatorMembership?.role === 'moderator' || moderatorMembership?.role === 'admin'
+  const isAdmin = moderatorMembership?.role === 'admin'
+  const { data: campusModerators = [] } = useSWR(isModerator && campusId ? ['campus-assignable-moderators', campusId] : null, async ([, cid]) => {
+    const { data: memberships, error: membershipError } = await supabase.from('campus_moderators').select('user_id,role').eq('campus_id', cid)
+    if (membershipError || !memberships?.length) return []
+    const assignedMembers = memberships as { user_id: string; role: string }[]
+    const { data: profiles, error: profileError } = await supabase.from('profiles').select('id,display_name').in('id', assignedMembers.map((membership) => membership.user_id))
+    if (profileError) return []
+    const profileRows = (profiles ?? []) as { id: string; display_name: string }[]
+    return assignedMembers.map((membership) => ({ user_id: membership.user_id, role: membership.role, display_name: profileRows.find((profile) => profile.id === membership.user_id)?.display_name ?? 'Campus moderator' }))
+  })
 
   useEffect(() => {
     const savedTheme = document.cookie.split('; ').find((cookie) => cookie.startsWith('campusheat-theme='))?.split('=')[1]
@@ -141,9 +165,9 @@ export function CampusApp() {
     const base = view === 'profile' ? userIssues : issues
     const normalized = query.trim().toLowerCase()
     return base.filter((issue) => {
-      const matchesText = !normalized || [issue.title, issue.description, issue.category?.name, issue.location?.name, issue.building_area, issue.department?.name].some((value) => value?.toLowerCase().includes(normalized))
+      const matchesText = !normalized || [issue.title, issue.description, issue.custom_category, issue.category?.name, issue.custom_location, issue.location?.name, issue.building_area, issue.custom_department, issue.department?.name, issue.problem_type].some((value) => value?.toLowerCase().includes(normalized))
       const matchesStatus = statusFilter === 'all' || issue.status === statusFilter
-      const matchesCategory = categoryFilter === 'all' || issue.category?.name === categoryFilter
+      const matchesCategory = categoryFilter === 'all' || (issue.custom_category || issue.category?.name) === categoryFilter
       return matchesText && matchesStatus && matchesCategory
     })
   }, [categoryFilter, issues, query, statusFilter, userIssues, view])
@@ -152,6 +176,22 @@ export function CampusApp() {
     await mutate(['issues', campusId])
     if (userId) await mutate(['my-issues', userId, campusId])
   }, [campusId, userId])
+
+  function evaluateEscalation(issueId: string) {
+    if (!userId) return
+    void fetch('/api/issue-intelligence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'evaluate_escalation', issueId }),
+    }).then(async (response) => {
+      if (response.ok) await mutate(['issue-events', issueId])
+    }).catch(() => undefined)
+  }
+
+  function openIssue(issueId: string) {
+    setSelectedIssueId(issueId)
+    evaluateEscalation(issueId)
+  }
 
   function toggleTheme() {
     const nextIsDarkMode = !isDarkMode
@@ -190,6 +230,7 @@ export function CampusApp() {
     if (error) setNotice('Could not save your vote. Please try again.')
     else {
       await refreshIssues()
+      evaluateEscalation(issue.id)
       await mutate(['my-vote', issue.id, userId])
     }
   }
@@ -203,7 +244,10 @@ export function CampusApp() {
       : await supabase.from('affected_users').insert({ issue_id: issue.id, user_id: userId! })
     setBusy(false)
     if (error) setNotice('Could not update your response.')
-    else await refreshIssues()
+    else {
+      await refreshIssues()
+      evaluateEscalation(issue.id)
+    }
   }
 
   async function toggleFollow(issue: CampusIssue) {
@@ -237,6 +281,7 @@ export function CampusApp() {
       return false
     }
     await refreshIssues()
+    evaluateEscalation(issueId)
     await mutate(['comments', issueId])
     return true
   }
@@ -254,7 +299,7 @@ export function CampusApp() {
     else setReportOpen(true)
   }
 
-  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : 'Your profile'
+  const pageTitle = view === 'home' ? 'Campus feed' : view === 'explore' ? 'Explore issues' : view === 'activity' ? 'Activity' : view === 'moderator' ? 'Campus operations' : 'Your profile'
 
   return (
     <div className={`campus-app${isDarkMode ? ' dark-theme' : ''}`}>
@@ -275,6 +320,7 @@ export function CampusApp() {
         </div>
         <nav className="side-links" aria-label="Main">
           {navItems.map(({ id, label, icon: Icon }) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={19} /><span>{label}</span>{id === 'activity' && <span className="nav-dot" />}</button>)}
+          {isModerator && <button className={`side-link ${view === 'moderator' ? 'active' : ''}`} onClick={() => setView('moderator')}><ShieldCheck size={19} /><span>Campus operations</span></button>}
         </nav>
         <button className="theme-toggle sidebar-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={17} /> : <Moon size={17} />}<span>{isDarkMode ? 'Light mode' : 'Dark mode'}</span></button>
         <button className="sidebar-report" onClick={openReport}><Plus size={18} /> Report an issue</button>
@@ -295,12 +341,14 @@ export function CampusApp() {
         {view === 'activity' ? (
           <section className="content-page activity-page">
             <PageHeading eyebrow="STAY IN THE LOOP" title={pageTitle} description="The latest updates on the issues you care about." />
-            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : activityLoading ? <LoadingState /> : activity.length === 0 ? <EmptyState icon={Bell} title="You're all caught up" body="Updates about reports you follow will show up here." /> : <div className="activity-list">{activity.map((item) => <button key={item.id} className={`activity-item ${item.read_at ? '' : 'unread'}`} onClick={() => { if (item.issue_id) setSelectedIssueId(item.issue_id); if (!item.read_at) void markRead(item.id) }}><span className="activity-icon"><Bell size={18} /></span><span className="activity-copy"><strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{timeAgo(item.created_at)}</small></span>{!item.read_at && <span className="unread-dot" />}</button>)}</div>}
+            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : activityLoading ? <LoadingState /> : activity.length === 0 ? <EmptyState icon={Bell} title="You're all caught up" body="Updates about reports you follow will show up here." /> : <div className="activity-list">{activity.map((item) => <button key={item.id} className={`activity-item ${item.read_at ? '' : 'unread'}`} onClick={() => { if (item.issue_id) openIssue(item.issue_id); if (!item.read_at) void markRead(item.id) }}><span className="activity-icon"><Bell size={18} /></span><span className="activity-copy"><strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{timeAgo(item.created_at)}</small></span>{!item.read_at && <span className="unread-dot" />}</button>)}</div>}
           </section>
+        ) : view === 'moderator' ? (
+          isModerator ? <ModeratorDashboard key={campusId} campusId={campusId} issues={issues} categories={categories} locations={locations} departments={departments} moderators={campusModerators} thresholds={thresholds} onOpenIssue={openIssue} onChanged={async () => { await refreshIssues(); await mutate(['issue-heat-settings', campusId]) }} isAdmin={isAdmin} /> : <section className="content-page"><PageHeading eyebrow="CAMPUS OPERATIONS" title="Moderator access required" description="This workspace is available to authorized campus moderators." /><EmptyState icon={ShieldCheck} title="This area is restricted" body="Ask a campus administrator to add you to the moderator team." /></section>
         ) : view === 'profile' ? (
           <section className="content-page profile-page">
             <PageHeading eyebrow="YOUR CAMPUS FOOTPRINT" title={pageTitle} description="Every report is a step toward a better campus." />
-            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div><div className="section-title-row"><div><span className="eyebrow">YOUR CONTRIBUTIONS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="Your story starts here" body="Report a campus issue and help get it on the right people's radar." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => setSelectedIssueId(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} userId={userId} busy={busy} />)}</div>}</>}
+            {!userId ? <SignInPrompt onSignIn={() => setAuthOpen(true)} /> : <><div className="profile-card"><span className="avatar avatar-large">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span><div><h2>{profile?.display_name ?? 'Campus student'}</h2><p>{campus?.name} · {campus?.city}</p><button className="text-button" onClick={() => void supabase.auth.signOut()}>Sign out</button></div></div>{isModerator && <button className="moderator-profile-link" onClick={() => setView('moderator')}><ShieldCheck size={17} /><span><strong>Campus operations</strong><small>Review reports and manage follow-through</small></span><ArrowUp size={15} /></button>}<div className="section-title-row"><div><span className="eyebrow">YOUR CONTRIBUTIONS</span><h2>My reports <span className="count-pill">{userIssues.length}</span></h2></div><button className="text-button" onClick={openReport}><Plus size={15} /> New report</button></div>{filteredIssues.length === 0 ? <EmptyState icon={Camera} title="Your story starts here" body="Report a campus issue and help get it on the right people's radar." action={<button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}</>}
           </section>
         ) : (
           <>
@@ -316,7 +364,7 @@ export function CampusApp() {
                 <div className="search-wrap"><Search size={16} /><input aria-label="Search campus issues" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search issues" /></div>
               </div>
               <div className="category-chips" aria-label="Filter by category"><button className={categoryFilter === 'all' ? 'chosen' : ''} onClick={() => setCategoryFilter('all')}>All issues</button>{orderedCategories.map((item) => <button key={item.id} className={categoryFilter === item.name ? 'chosen' : ''} onClick={() => setCategoryFilter(categoryFilter === item.name ? 'all' : item.name)}>{item.name}</button>)}</div>
-              {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => setSelectedIssueId(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} userId={userId} busy={busy} />)}</div>}
+              {issueError ? <EmptyState icon={CircleHelp} title="Couldn't load the campus feed" body="Check your connection and try again." action={<button className="text-button" onClick={() => void mutate(['issues', campusId])}>Try again</button>} /> : issuesLoading ? <LoadingState /> : filteredIssues.length === 0 ? <EmptyState icon={Search} title="No issues found" body={query || categoryFilter !== 'all' || statusFilter !== 'all' ? 'Try another search or clear your filters.' : 'Be the first to report something that needs attention.'} action={query || categoryFilter !== 'all' || statusFilter !== 'all' ? <button className="text-button" onClick={() => { setQuery(''); setCategoryFilter('all'); setStatusFilter('all') }}>Clear filters</button> : <button className="button-primary small" onClick={openReport}>Report an issue</button>} /> : <div className="feed-list">{filteredIssues.map((issue) => <IssueCard key={issue.id} issue={issue} onOpen={() => openIssue(issue.id)} onVote={(item, value) => castVote(item, value)} onAffected={markAffected} onFollow={toggleFollow} onAuth={() => setAuthOpen(true)} issues={issues} thresholds={thresholds} userId={userId} busy={busy} />)}</div>}
               <div className="feed-footer"><span>Showing {filteredIssues.length} of {issues.length} reports</span><span>Made for students, by students <Heart size={12} fill="currentColor" /></span></div>
             </section>
           </>
@@ -327,7 +375,7 @@ export function CampusApp() {
         <div className="right-top"><button className="icon-button notification-button" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Open activity"><Bell size={18} /></button>{userId ? <button className="user-chip" onClick={() => setView('profile')}><span className="avatar avatar-tiny">{profile?.display_name?.slice(0, 1).toUpperCase() ?? 'S'}</span>{profile?.display_name ?? 'Student'}</button> : <button className="sign-in-button" onClick={() => setAuthOpen(true)}><LogIn size={15} /> Sign in</button>}</div>
         <section className="campus-card"><div className="campus-card-top"><span className="campus-card-icon"><Building2 size={17} /></span><span className="eyebrow">YOUR CAMPUS</span><button aria-label="Change campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)}><ChevronDown size={16} /></button></div><h2>{campus?.name ?? 'Campus community'}</h2><p><MapPin size={14} />{campus?.city ?? 'Choose your campus'}</p><div className="campus-stats"><div><strong>{issues.length}</strong><span>open reports</span></div><div><strong>{issues.filter((issue) => issue.status === 'resolved').length}</strong><span>resolved</span></div></div><button className="campus-card-link" onClick={() => setView('explore')}>Explore campus <ArrowUp size={14} /></button></section>
         <section className="progress-card"><div className="side-section-heading"><div><span className="eyebrow">COMMUNITY MOMENTUM</span><h3>Good things move.</h3></div><Sparkles size={17} /></div><div className="progress-metric"><strong>{issues.reduce((total, issue) => total + issue.affected_users.length, 0)}</strong><span>students have spoken up</span></div><div className="progress-bar"><span style={{ width: `${Math.min(100, Math.max(16, issues.length ? (issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100 : 16))}%` }} /></div><div className="progress-foot"><span>Campus follow-through</span><span>{issues.length ? Math.round((issues.filter((issue) => issue.status === 'resolved').length / issues.length) * 100) : 0}%</span></div></section>
-        <section className="trending-section"><div className="side-section-heading"><div><span className="eyebrow">PICKING UP STEAM</span><h3>Most discussed</h3></div><Flame size={17} fill="currentColor" /></div>{issues.slice().sort((a, b) => b.comments.length + b.affected_users.length - a.comments.length - a.affected_users.length).slice(0, 3).map((issue, index) => <button key={issue.id} className="trending-item" onClick={() => setSelectedIssueId(issue.id)}><span className={`trending-rank ${index === 0 ? 'hot' : ''}`}>0{index + 1}</span><span><strong>{issue.title}</strong><small><MessageCircle size={12} /> {issue.comments.length} comments · {timeAgo(issue.created_at)}</small></span><ArrowUp size={14} /></button>)}</section>
+        <section className="trending-section"><div className="side-section-heading"><div><span className="eyebrow">PICKING UP STEAM</span><h3>Most discussed</h3></div><Flame size={17} fill="currentColor" /></div>{issues.slice().sort((a, b) => b.comments.length + b.affected_users.length - a.comments.length - a.affected_users.length).slice(0, 3).map((issue, index) => <button key={issue.id} className="trending-item" onClick={() => openIssue(issue.id)}><span className={`trending-rank ${index === 0 ? 'hot' : ''}`}>0{index + 1}</span><span><strong>{issue.title}</strong><small><MessageCircle size={12} /> {issue.comments.length} comments · {timeAgo(issue.created_at)}</small></span><ArrowUp size={14} /></button>)}</section>
         <div className="community-note"><ShieldCheck size={17} /><span><strong>Real people. Real progress.</strong><small>Keep it kind, constructive, and campus-focused.</small></span></div>
         <footer className="right-footer"><span>© 2026 campusheat</span><span>Community first <Flame size={12} /></span></footer>
       </aside>
@@ -337,7 +385,7 @@ export function CampusApp() {
       {notice && <div className="toast-message" role="status">{notice}</div>}
       {reportOpen && <ReportDialog campusId={campusId} categories={categories} locations={locations} departments={departments} onClose={() => setReportOpen(false)} onRequireAuth={() => setAuthOpen(true)} onCreated={async (warning) => { setReportOpen(false); setView('home'); await refreshIssues(); setNotice(warning ?? 'Your report is live. Thanks for speaking up.'); window.setTimeout(() => setNotice(''), 3200) }} />}
       {authOpen && <AuthDialog onClose={() => { setAuthOpen(false); setReportAfterAuth(false) }} onAuthenticated={async (uid, displayName) => { setUserId(uid); const { data } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', uid).maybeSingle(); if (data) setProfile(data as Profile); else if (displayName) setProfile({ id: uid, display_name: displayName, avatar_url: null, campus_id: null }); setAuthOpen(false); if (reportAfterAuth) { setReportAfterAuth(false); setReportOpen(true) } }} />}
-      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} onRequireAuth={() => setAuthOpen(true)} />}
+      {selectedIssue && <IssueDetail issue={selectedIssue} userId={userId} onClose={() => setSelectedIssueId(null)} onVote={castVote} onAffected={markAffected} onFollow={toggleFollow} onComment={addComment} busy={busy} isModerator={isModerator} onRequireAuth={() => setAuthOpen(true)} />}
     </div>
   )
 }
