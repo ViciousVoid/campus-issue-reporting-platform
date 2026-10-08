@@ -33,8 +33,9 @@ export type CampusIssue = {
   department: { name: string } | null
   reporter: { display_name: string; avatar_url: string | null } | null
   media: { storage_path: string; display_order: number }[]
-  votes: { value: number }[]
+  votes: { value: number; user_id: string }[]
   affected_users: { user_id: string }[]
+  followers: { user_id: string }[]
   comments: { id: string }[]
 }
 
