@@ -12,7 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import {
-  STATUS_LABELS, type AppView, type Campus, type CampusIssue,
+  STATUS_LABELS, isHiddenCampus, type AppView, type Campus, type CampusIssue,
   type Category, type IssueStatus,
 } from '@/lib/campus'
 import { IssueCard } from '@/components/campus/issue-card'
@@ -41,11 +41,43 @@ type CampusDetails = Campus & {
   banner_url: string | null
 }
 type CampusAnnouncement = { id: string; title: string; body: string; created_at: string }
+type CampusMenuProps = {
+  campuses: CampusDetails[]
+  selectedCampusId: string
+  searchInput: string
+  searchQuery: string
+  className?: string
+  onSearchInputChange: (value: string) => void
+  onSearch: () => void
+  onCampusSelect: (campusId: string) => void
+}
+
+function CampusMenu({ campuses, selectedCampusId, searchInput, searchQuery, className = '', onSearchInputChange, onSearch, onCampusSelect }: CampusMenuProps) {
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const matchingCampuses = campuses.filter((campus) => !normalizedQuery || [campus.name, campus.city, campus.region].some((value) => value.toLowerCase().includes(normalizedQuery)))
+
+  return (
+    <div className={`campus-menu ${className}`} aria-label="Choose campus">
+      <div className="campus-search">
+        <label className="campus-search-field">
+          <Search size={15} aria-hidden="true" />
+          <span className="sr-only">Search colleges</span>
+          <input type="search" value={searchInput} onChange={(event) => onSearchInputChange(event.target.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return; event.preventDefault(); onSearch() }} placeholder="College or city" />
+        </label>
+        <button className="campus-search-button" type="button" onClick={onSearch}><Search size={13} aria-hidden="true" /> Search</button>
+      </div>
+      <div className="campus-options" role="group" aria-label="Matching colleges">
+        {matchingCampuses.map((campus) => <button key={campus.id} type="button" aria-pressed={campus.id === selectedCampusId} onClick={() => onCampusSelect(campus.id)}><span>{campus.name}</span><small>{campus.city}</small></button>)}
+        {matchingCampuses.length === 0 && <p className="campus-search-empty">No colleges found. Try another search.</p>}
+      </div>
+    </div>
+  )
+}
 
 async function loadCampuses(): Promise<CampusDetails[]> {
   const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug,is_public,signup_enabled,logo_label,brand_color,brand_dark_color,banner_url').order('name')
   if (error) throw error
-  return (data ?? []) as CampusDetails[]
+  return ((data ?? []) as CampusDetails[]).filter((campus) => !isHiddenCampus(campus))
 }
 
 async function loadCategories(campusId: string): Promise<Category[]> {
@@ -104,6 +136,8 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [locationFilter, setLocationFilter] = useState('all')
   const [fireOnly, setFireOnly] = useState(false)
   const [campusMenuOpen, setCampusMenuOpen] = useState(false)
+  const [campusSearchInput, setCampusSearchInput] = useState('')
+  const [campusSearchQuery, setCampusSearchQuery] = useState('')
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [heroImageUploading, setHeroImageUploading] = useState(false)
@@ -351,6 +385,8 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     setLocationFilter('all')
     setFireOnly(false)
     setCampusMenuOpen(false)
+    setCampusSearchInput('')
+    setCampusSearchQuery('')
     router.push(`/c/${nextCampus.slug}`)
   }
 
@@ -432,12 +468,12 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
         </a>
         <div className="sidebar-campus-wrap">
           <span className="eyebrow">YOUR CAMPUS</span>
-          <button className="campus-switcher" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-expanded={campusMenuOpen}>
+          <button className="campus-switcher" onClick={() => { setCampusMenuOpen(!campusMenuOpen); setCampusSearchInput(''); setCampusSearchQuery('') }} aria-expanded={campusMenuOpen}>
             <span className="campus-switcher-icon" style={campus ? { backgroundColor: campus.brand_color, color: '#fff' } : undefined} aria-hidden="true">{campus?.logo_label ?? <Building2 size={17} />}</span>
             <span className="campus-switcher-copy"><strong>{campus?.name ?? 'Choose your campus'}</strong><small>{campus?.city ?? 'Select a campus'}</small></span>
             <ChevronDown size={16} />
           </button>
-          {campusMenuOpen && <div className="campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}{item.signup_enabled ? '' : ' · Preview'}</small></button>)}</div>}
+          {campusMenuOpen && <CampusMenu campuses={campuses} selectedCampusId={campusId} searchInput={campusSearchInput} searchQuery={campusSearchQuery} onSearchInputChange={setCampusSearchInput} onSearch={() => setCampusSearchQuery(campusSearchInput.trim())} onCampusSelect={handleCampusChange} />}
           {campusError && <p className="inline-error">Campuses could not be loaded.</p>}
         </div>
         <nav className="side-links" aria-label="Main">
@@ -454,23 +490,23 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
       <main className="main-column">
         <header className="mobile-header">
           <a className="brand-lockup compact" href="#home" onClick={(event) => { event.preventDefault(); setView('home') }}><span className="brand-symbol"><Flame size={19} fill="currentColor" /></span><strong>campus<span className="brand-hot">heat</span></strong></a>
-          <button className="mobile-campus" onClick={() => setCampusMenuOpen(!campusMenuOpen)} aria-label={`Campus: ${campus?.name ?? 'Choose campus'}`}><MapPin size={15} /><span>{campus?.city ?? 'Campus'}</span><ChevronDown size={14} /></button>
+          <button className="mobile-campus" onClick={() => { setCampusMenuOpen(!campusMenuOpen); setCampusSearchInput(''); setCampusSearchQuery('') }} aria-expanded={campusMenuOpen} aria-label={`Campus: ${campus?.name ?? 'Choose campus'}`}><MapPin size={15} /><span>{campus?.city ?? 'Campus'}</span><ChevronDown size={14} /></button>
           {isAdmin && <button className="icon-button mobile-dev-button" onClick={() => setView('developer')} aria-label="Developer options"><Wrench size={18} /></button>}
           <button className="icon-button mobile-notifications" onClick={() => userId ? setView('activity') : setAuthOpen(true)} aria-label="Notifications"><Bell size={19} /></button>
           <button className="icon-button mobile-theme-toggle" type="button" onClick={toggleTheme} aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'} aria-pressed={isDarkMode}>{isDarkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
-          {campusMenuOpen && <div className="campus-menu mobile-campus-menu" role="listbox" aria-label="Choose campus">{campuses.map((item) => <button key={item.id} role="option" aria-selected={item.id === campusId} onClick={() => handleCampusChange(item.id)}><span>{item.name}</span><small>{item.city}{item.signup_enabled ? '' : ' · Preview'}</small></button>)}</div>}
+          {campusMenuOpen && <CampusMenu className="mobile-campus-menu" campuses={campuses} selectedCampusId={campusId} searchInput={campusSearchInput} searchQuery={campusSearchQuery} onSearchInputChange={setCampusSearchInput} onSearch={() => setCampusSearchQuery(campusSearchInput.trim())} onCampusSelect={handleCampusChange} />}
         </header>
 
         {campusAccessDenied ? (
           <section className="content-page campus-preview-page">
-            <PageHeading eyebrow="PRIVATE CAMPUS PREVIEW" title={campus?.name ?? 'Campus preview'} description={`${campus?.city ?? 'Campus'} · student access is not enabled for this demo space.`} />
+            <PageHeading eyebrow="CAMPUS ACCESS" title={campus?.name ?? 'Campus access restricted'} description={`${campus?.city ?? 'Campus'} · student access is currently unavailable for this campus.`} />
             <div className="campus-preview-card">
               {campusHeroImageUrl ? <img className="campus-preview-image" src={campusHeroImageUrl} alt="" /> : <div className="campus-preview-image campus-preview-image-fallback" aria-hidden="true" />}
               <div className="campus-preview-copy">
                 <span className="campus-preview-lock"><LockKeyhole size={16} /> PRIVATE CAMPUS</span>
                 <h2>{campus?.name}</h2>
-                <p>This campus is shown for the hackathon preview. Student accounts, reports, comments, chat, and photos stay restricted to their own campus.</p>
-                <button className="button-primary small" type="button" onClick={() => { const publicCampus = campuses.find((item) => item.slug === 'sgsits-indore'); if (publicCampus) handleCampusChange(publicCampus.id) }}>Go to SGSITS Indore</button>
+                <p>Student accounts and campus activity are available only to members of this campus.</p>
+                {campuses.find((item) => item.signup_enabled) && <button className="button-primary small" type="button" onClick={() => { const publicCampus = campuses.find((item) => item.signup_enabled); if (publicCampus) handleCampusChange(publicCampus.id) }}>Explore an available campus</button>}
               </div>
             </div>
             <CampusAnnouncements announcements={announcements} />

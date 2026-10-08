@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import useSWR from 'swr'
 import { ArrowLeft, CheckCircle2, LoaderCircle, LockKeyhole, Mail, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { isHiddenCampus } from '@/lib/campus'
 
 type AuthDialogProps = { onClose: () => void; onAuthenticated: (userId: string, displayName?: string) => void }
 type SignupCampus = { id: string; name: string; slug: string; signup_enabled: boolean }
@@ -21,7 +22,7 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
   const { data: campuses = [] } = useSWR('signup-campuses', async () => {
     const { data, error } = await supabase.from('campuses').select('id,name,slug,signup_enabled').order('name')
     if (error) throw error
-    return (data ?? []) as SignupCampus[]
+    return ((data ?? []) as SignupCampus[]).filter((campus) => !isHiddenCampus(campus))
   })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -75,7 +76,7 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
 <button className="button-secondary" onClick={() => { setSuccess(''); setMode('signin') }}><ArrowLeft size={14} /> Back to sign in</button></div> : <form className="auth-form" onSubmit={submit}>
           {mode === 'signup' && <>
             <label className="form-field"><span>Your name</span><input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="How should we address you?" /></label>
-            <label className="form-field"><span>College campus</span><select required value={campusSlug} onChange={(event) => setCampusSlug(event.target.value)}>{campuses.filter((campus) => campus.signup_enabled).map((campus) => <option key={campus.id} value={campus.slug}>{campus.name}</option>)}<optgroup label="Hackathon previews">{campuses.filter((campus) => !campus.signup_enabled).map((campus) => <option key={campus.id} value={campus.slug} disabled>{campus.name} · private</option>)}</optgroup></select><small className="auth-campus-note">New accounts join SGSITS Indore. Other campuses are judge-only previews.</small></label>
+            <label className="form-field"><span>College campus</span><select required value={campusSlug} onChange={(event) => setCampusSlug(event.target.value)}>{campuses.filter((campus) => campus.signup_enabled).map((campus) => <option key={campus.id} value={campus.slug}>{campus.name}</option>)}</select><small className="auth-campus-note">Choose the campus where you&apos;re enrolled.</small></label>
           </>}
           <label className="form-field"><span>Email address</span><span className="input-with-icon"><Mail size={16} /><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" /></span></label>
           <label className="form-field"><span>Password</span><span className="input-with-icon"><LockKeyhole size={16} /><input autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></span></label>

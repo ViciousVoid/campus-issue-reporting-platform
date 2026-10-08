@@ -12,6 +12,12 @@ export type Campus = {
   banner_url?: string | null
 }
 
+export function isHiddenCampus(campus: Pick<Campus, 'slug' | 'name'>) {
+  const slug = campus.slug.trim().toLowerCase().replaceAll('_', '-')
+  const name = campus.name.trim().toLowerCase()
+  return slug === 'iiit-sonepat' || name.includes('iiit sonepat')
+}
+
 export type Category = {
   id: string
   name: string

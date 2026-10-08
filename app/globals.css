@@ -74,10 +74,19 @@
 .campus-switcher-copy strong { font-size: 11px; font-weight: 700; }
 .campus-switcher-copy small { margin-top: 3px; color: #87908a; font-size: 10px; }
 .campus-switcher > svg { color: #89928b; }
-.campus-menu { position: absolute; top: calc(100% + 7px); left: 0; right: 0; z-index: 40; padding: 5px; background: white; border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 15px 35px #2030271c; }
-.campus-menu button { width: 100%; padding: 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; font-size: 12px; font-weight: 700; }
-.campus-menu button:hover,.campus-menu button[aria-selected='true'] { background: #f5f6f2; color: var(--accent-dark); }
+.campus-menu { position: absolute; top: calc(100% + 7px); left: 0; right: 0; z-index: 40; padding: 6px; background: white; border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 15px 35px #2030271c; }
+.campus-search { display: flex; align-items: center; gap: 5px; padding: 2px 2px 8px; border-bottom: 1px solid var(--border); }
+.campus-search-field { min-width: 0; flex: 1; height: 31px; padding: 0 7px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; color: #89928b; }
+.campus-search-field input { width: 100%; min-width: 0; padding: 0; border: 0; outline: none; color: var(--ink); background: transparent; font-size: 10px; }
+.campus-search-field input:focus-visible { outline: none; }
+.campus-search-field:focus-within { outline: 3px solid #ee684866; outline-offset: 2px; }
+.campus-search-button { min-height: 31px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 8px; color: white; background: var(--accent); cursor: pointer; font-size: 10px; font-weight: 700; }
+.campus-search-button:hover { background: var(--accent-dark); }
+.campus-options { max-height: 230px; overflow-y: auto; padding-top: 4px; }
+.campus-options > button { width: 100%; padding: 9px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; border: 0; border-radius: 9px; background: transparent; cursor: pointer; text-align: left; font-size: 12px; font-weight: 700; }
+.campus-options > button:hover,.campus-options > button[aria-pressed='true'] { background: #f5f6f2; color: var(--accent-dark); }
 .campus-menu small { color: #828c84; font-size: 10px; font-weight: 400; }
+.campus-search-empty { margin: 0; padding: 14px 10px; color: var(--subtle-ink); font-size: 10px; line-height: 1.5; }
 .side-links { display: grid; gap: 5px; margin-top: 30px; }
 .side-link { border: 0; background: transparent; color: #738078; padding: 11px 12px; display: flex; align-items: center; gap: 13px; border-radius: 10px; text-align: left; cursor: pointer; font-size: 13px; font-weight: 600; transition: background .16s ease, color .16s ease; }
 .side-link:hover { background: #f2f3ef; color: var(--ink); }
@@ -430,6 +439,9 @@
   color: var(--ink);
 }
 .campus-app.dark-theme .campus-sidebar,.campus-app.dark-theme .right-column,.campus-app.dark-theme .mobile-header,.campus-app.dark-theme .mobile-nav { border-color: var(--border); background: #19151f; }
+.campus-app.dark-theme .campus-search { border-color: var(--border); }
+.campus-app.dark-theme .campus-search-field { border-color: var(--border); background: #211d28; }
+.campus-app.dark-theme .campus-search-field input { color: var(--ink); }
 .campus-app.dark-theme .campus-switcher,.campus-app.dark-theme .progress-card,.campus-app.dark-theme .welcome-panel,.campus-app.dark-theme .campus-preview-card { border-color: var(--border); background: #211d28; }
 .campus-app.dark-theme .campus-switcher-icon,.campus-app.dark-theme .campus-card,.campus-app.dark-theme .issue-card,.campus-app.dark-theme .profile-card,.campus-app.dark-theme .activity-list,.campus-app.dark-theme .activity-item,.campus-app.dark-theme .campus-menu,.campus-app.dark-theme .campus-announcements,.campus-app.dark-theme .search-wrap,.campus-app.dark-theme .category-chips button,.campus-app.dark-theme .report-dialog,.campus-app.dark-theme .issue-detail-dialog,.campus-app.dark-theme .auth-dialog { border-color: var(--border); background: #1d1923; color: var(--ink); }
 .campus-app.dark-theme .welcome-art { background: linear-gradient(180deg, #2b2527, #242426); }
@@ -442,7 +454,7 @@
 .campus-app.dark-theme .campus-preview-copy p,.campus-app.dark-theme .campus-announcements article p,.campus-app.dark-theme .auth-campus-note { color: var(--subtle-ink); }
 .campus-app.dark-theme .category-chips button:hover,.campus-app.dark-theme .category-chips button.chosen { border-color: #a83b4b; color: #ffe1e5; background: linear-gradient(110deg, #48202b, #382029); }
 .campus-app.dark-theme .side-link.active { background: #322027; color: #f06478; }
-.campus-app.dark-theme .side-link:hover,.campus-app.dark-theme .icon-button:hover,.campus-app.dark-theme .campus-menu button:hover,.campus-app.dark-theme .campus-menu button[aria-selected='true'],.campus-app.dark-theme .activity-item:hover,.campus-app.dark-theme .activity-item.unread { background: #28232e; }
+.campus-app.dark-theme .side-link:hover,.campus-app.dark-theme .icon-button:hover,.campus-app.dark-theme .campus-options > button:hover,.campus-app.dark-theme .campus-options > button[aria-pressed='true'],.campus-app.dark-theme .activity-item:hover,.campus-app.dark-theme .activity-item.unread { background: #28232e; }
 .campus-app.dark-theme .mobile-campus,.campus-app.dark-theme .sign-in-button,.campus-app.dark-theme .desktop-report-inline,.campus-app.dark-theme .button-secondary,.campus-app.dark-theme .form-field input,.campus-app.dark-theme .form-field select,.campus-app.dark-theme .form-field textarea,.campus-app.dark-theme .comment-form { border-color: var(--border); background: #211d28; color: var(--ink); }
 .campus-app.dark-theme .mobile-nav > button,.campus-app.dark-theme .mobile-campus,.campus-app.dark-theme .side-link,.campus-app.dark-theme .feed-tabs button,.campus-app.dark-theme .category-chips button,.campus-app.dark-theme .issue-source,.campus-app.dark-theme .issue-location-row,.campus-app.dark-theme .action-button,.campus-app.dark-theme .feed-heading p,.campus-app.dark-theme .feed-footer,.campus-app.dark-theme .page-heading p,.campus-app.dark-theme .profile-card p,.campus-app.dark-theme .activity-copy span,.campus-app.dark-theme .campus-menu small,.campus-app.dark-theme .detail-description,.campus-app.dark-theme .auth-subtitle { color: #b6acbf; }
 .campus-app.dark-theme .mobile-nav > button.active,.campus-app.dark-theme .feed-tabs button.selected,.campus-app.dark-theme .action-button:hover,.campus-app.dark-theme .action-button.is-active,.campus-app.dark-theme .issue-card-title:hover h2 { color: #f06478; }
