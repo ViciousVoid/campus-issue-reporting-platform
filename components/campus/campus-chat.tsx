@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import useSWR, { mutate } from 'swr'
-import { Building2, ImagePlus, LoaderCircle, LockKeyhole, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
+import { Building2, ImagePlus, LoaderCircle, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { createGuestName } from '@/lib/guest-name'
 import { relativeTime } from '@/components/campus/issue-card'
 import { PhotoLightbox } from '@/components/campus/photo-lightbox'
 import { Bubble, BubbleContent } from '@/components/ui/bubble'
@@ -46,7 +47,8 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl) }, [imagePreviewUrl])
-  const messagesKey = useMemo(() => userId && campusId ? ['campus-chat', campusId] as const : null, [campusId, userId])
+  const [guestName, setGuestName] = useState<string | null>(null)
+  const messagesKey = useMemo(() => campusId ? ['campus-chat', campusId] as const : null, [campusId])
   const { data: messages = [], error, isLoading } = useSWR(messagesKey, async ([, id]) => {
     const { data, error: fetchError } = await supabase
       .from('campus_chat_messages')
@@ -81,12 +83,20 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
     if (messagesKey) await mutate(messagesKey)
   }
 
+  async function getOrCreateChatUser() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) return user
+
+    const displayName = createGuestName()
+    const { data, error: guestError } = await supabase.auth.signInAnonymously({ options: { data: { display_name: displayName } } })
+    if (guestError || !data.user) throw guestError ?? new Error('Guest sign-in failed')
+    await supabase.from('profiles').upsert({ id: data.user.id, display_name: displayName }, { onConflict: 'id' })
+    setGuestName(displayName)
+    return data.user
+  }
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!userId) {
-      onRequireAuth()
-      return
-    }
     const text = body.trim()
     if ((!text && !selectedImage) || sending) return
 
@@ -95,11 +105,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
     let uploadedPath: string | null = null
 
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) {
-        onRequireAuth()
-        return
-      }
+      const user = await getOrCreateChatUser()
 
       if (selectedImage) {
         const imagePath = `${campusId}/${user.id}/${crypto.randomUUID()}.${IMAGE_EXTENSIONS[selectedImage.type]}`
@@ -125,7 +131,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
       void refreshMessages().catch(() => undefined)
     } catch {
       if (uploadedPath) await supabase.storage.from('campus-chat-images').remove([uploadedPath])
-      setSendError('Your message could not be sent. Check your campus account and try again.')
+      setSendError('Your message could not be sent. Please try again.')
     } finally {
       setSending(false)
     }
@@ -174,14 +180,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
       <div className="campus-chat-community"><Users size={14} /><span>Chat with people from your campus</span></div>
 
-      {!userId ? (
-        <div className="campus-chat-gate">
-          <span><LockKeyhole size={19} /></span>
-          <strong>Your campus, together</strong>
-          <p>Sign in with your campus account to join the conversation.</p>
-          <button className="button-primary small" type="button" onClick={onRequireAuth}>Sign in to chat</button>
-        </div>
-      ) : (
+      {(
         <>
           <MessageScrollerProvider>
             <MessageScroller className="campus-chat-scroller">
@@ -232,13 +231,12 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
               value={body}
               onChange={(event) => setBody(event.target.value)}
               onKeyDown={submitOnEnter}
-              onFocus={() => { if (!userId) onRequireAuth() }}
               placeholder="Message your campus…"
             />
             <div className="campus-chat-composer-footer">
-              <span>Be kind and keep it campus-friendly.</span>
+              <span>{guestName ? `Chatting as ${guestName}` : !userId ? <>{'Chatting as a guest · '}<button className="text-button" type="button" onClick={onRequireAuth}>Sign in</button></> : 'Be kind and keep it campus-friendly.'}</span>
               <div className="campus-chat-composer-actions">
-                <button className="icon-button campus-chat-attach" type="button" aria-label={userId ? 'Attach an image' : 'Sign in to attach an image'} title="Attach an image" onClick={() => userId ? imageInputRef.current?.click() : onRequireAuth()} disabled={sending}>
+                <button className="icon-button campus-chat-attach" type="button" aria-label="Attach an image" title="Attach an image" onClick={() => imageInputRef.current?.click()} disabled={sending}>
                   <ImagePlus size={16} />
                 </button>
                 <input ref={imageInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseImage} />

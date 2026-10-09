@@ -125,6 +125,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [view, setView] = useState<AppView>('home')
   const [campusId, setCampusId] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  const [isGuest, setIsGuest] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -151,7 +152,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  const canLoadCampusData = !userId || profile?.campus_id === campusId
+  const canLoadCampusData = !userId || isGuest || profile?.campus_id === campusId
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
   const { data: categories = [] } = useSWR(campusId && canLoadCampusData ? ['categories', campusId] : null, ([, id]) => loadCategories(id))
   const { data: announcements = [] } = useSWR(campusId ? ['campus-announcements', campusId] : null, async ([, id]) => {
@@ -159,7 +160,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     if (error) throw error
     return (data ?? []) as CampusAnnouncement[]
   })
-  const { data: campusHeroImagePath } = useSWR(campusId && canLoadCampusData ? ['campus-hero-image', campusId] : null, async ([, id]) => {
+  const { data: campusHeroImagePath } = useSWR(campusId ? ['campus-hero-image', campusId] : null, async ([, id]) => {
     const { data, error } = await supabase.from('campus_hero_images').select('storage_path').eq('campus_id', id).maybeSingle()
     if (error) throw error
     return data?.storage_path ?? null
@@ -220,6 +221,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
       if (!active) return
       const user = data.user
       setUserId(user?.id ?? null)
+      setIsGuest(Boolean(user?.is_anonymous))
       if (!user) return
       const { data: row } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', user.id).maybeSingle()
       if (!active) return
@@ -230,7 +232,15 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     })
     const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setUserId(session?.user.id ?? null)
-      if (!session?.user) setProfile(null)
+      setIsGuest(Boolean(session?.user.is_anonymous))
+      if (!session?.user) {
+        setProfile(null)
+        return
+      }
+      if (session.user.is_anonymous) {
+        const displayName = (session.user.user_metadata?.display_name as string | undefined) ?? 'Guest'
+        setProfile((current) => current?.id === session.user.id ? current : { id: session.user.id, display_name: displayName, avatar_url: null, campus_id: null } as Profile)
+      }
     })
     return () => { active = false; listener.subscription.unsubscribe() }
   }, [])
@@ -246,7 +256,8 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   }, [campusId, campuses, initialCampusSlug, profile?.campus_id])
 
   const campus = campuses.find((item) => item.id === campusId)
-  const campusAccessDenied = Boolean(campusId && ((userId && !canLoadCampusData) || (!campus?.is_public && !profile?.campus_id)))
+  const isMember = Boolean(userId && !isGuest)
+  const campusAccessDenied = Boolean(campusId && isMember && (!canLoadCampusData || (!campus?.is_public && !profile?.campus_id)))
   const campusStyle = {
     '--accent': campus?.brand_color ?? '#ed6747',
     '--accent-dark': campus?.brand_dark_color ?? '#d95739',
@@ -633,7 +644,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
           <>
             <section className="welcome-panel">
               <div className="welcome-copy"><span className="welcome-kicker"><span className="live-dot" /> CAMPUS ISSUE REPORTING</span><h1>Report a<br /><em>campus problem.</em></h1><p>Submit maintenance, safety, and other campus concerns for review.</p><button className="button-primary welcome-cta" onClick={openReport}><Plus size={18} /> Report a problem</button></div>
-              <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(userId && canLoadCampusData)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
+              <CampusHeroArt imageUrl={campusHeroImageUrl} uploading={heroImageUploading} canEdit={Boolean(isMember && canLoadCampusData)} onChooseFile={replaceCampusHeroImage} onRequireAuth={() => setAuthOpen(true)} />
             </section>
             <CampusAnnouncements announcements={announcements} />
 
