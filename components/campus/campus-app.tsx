@@ -167,7 +167,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     if (error) throw error
     return data?.storage_path ?? null
   })
-  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId && canLoadCampusData ? ['issues', campusId, Boolean(userId)] : null, ([, id, signedIn]) => loadIssues(id, signedIn), { refreshInterval: 30000 })
+  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId && canLoadCampusData ? (['issues', campusId, Boolean(userId)] as const) : null, ([, id, signedIn]) => loadIssues(id, signedIn), { refreshInterval: 30000 })
   const { data: userIssues = [] } = useSWR(userId && campusId && canLoadCampusData ? ['my-issues', userId, campusId] : null, async ([, uid, cid]) => {
     const { data, error } = await supabase.from('issues').select(ISSUE_SELECT).eq('reporter_id', uid).eq('campus_id', cid).order('created_at', { ascending: false })
     if (error) throw error
