@@ -28,6 +28,7 @@ import { CampusHeroArt } from '@/components/campus/campus-hero-art'
 
 const supabase = createClient()
 const ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order,uploaded_by),votes(value,user_id),affected_users(user_id),followers:issue_followers(user_id),comments(id,created_at)'
+const PUBLIC_ISSUE_SELECT = 'id,campus_id,reporter_id,category_id,location_id,department_id,title,description,building_area,faculty_tag,anonymous_public,status,severity,latitude,longitude,developer_upvote_override,developer_downvote_override,moderation_status,moderation_reason,duplicate_of,custom_category,custom_location,custom_department,problem_type,assigned_to,resolved_at,resolution_verification,created_at,updated_at,category:categories(name,icon,color),location:locations(name,building),department:departments(name),media:issue_media(storage_path,display_order),votes(value),comments(id,created_at)'
 
 type ActivityItem = { id: string; title: string; body: string | null; kind: string; created_at: string; read_at: string | null; issue_id: string | null }
 type Profile = { id: string; display_name: string; avatar_url: string | null; campus_id: string | null }
@@ -91,10 +92,12 @@ async function loadCategories(campusId: string): Promise<Category[]> {
   return (data ?? []) as Category[]
 }
 
-async function loadIssues(campusId: string): Promise<CampusIssue[]> {
-  const { data, error } = await supabase.from('issues').select(ISSUE_SELECT).eq('campus_id', campusId).order('created_at', { ascending: false }).limit(60)
+async function loadIssues(campusId: string, signedIn: boolean): Promise<CampusIssue[]> {
+  let request = supabase.from('issues').select(signedIn ? ISSUE_SELECT : PUBLIC_ISSUE_SELECT).eq('campus_id', campusId).order('created_at', { ascending: false }).limit(60)
+  if (!signedIn) request = request.eq('moderation_status', 'approved') as typeof request
+  const { data, error } = await request
   if (error) throw error
-  return (data ?? []) as unknown as CampusIssue[]
+  return (data ?? []).map((row) => ({ media: [], votes: [], affected_users: [], followers: [], comments: [], ...row })) as unknown as CampusIssue[]
 }
 
 function timeAgo(value: string) {
@@ -164,7 +167,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     if (error) throw error
     return data?.storage_path ?? null
   })
-  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId && canLoadCampusData ? ['issues', campusId] : null, ([, id]) => loadIssues(id))
+  const { data: issues = [], error: issueError, isLoading: issuesLoading } = useSWR(campusId && canLoadCampusData ? ['issues', campusId, Boolean(userId)] : null, ([, id, signedIn]) => loadIssues(id, signedIn), { refreshInterval: 30000 })
   const { data: userIssues = [] } = useSWR(userId && campusId && canLoadCampusData ? ['my-issues', userId, campusId] : null, async ([, uid, cid]) => {
     const { data, error } = await supabase.from('issues').select(ISSUE_SELECT).eq('reporter_id', uid).eq('campus_id', cid).order('created_at', { ascending: false })
     if (error) throw error
