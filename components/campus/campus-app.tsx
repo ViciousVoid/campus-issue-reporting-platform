@@ -151,7 +151,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  const canLoadCampusData = !userId || profile?.campus_id === campusId
+  const canLoadCampusData = Boolean(campusesForAccessPlaceholder)
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
   const { data: categories = [] } = useSWR(campusId && canLoadCampusData ? ['categories', campusId] : null, ([, id]) => loadCategories(id))
   const { data: announcements = [] } = useSWR(campusId ? ['campus-announcements', campusId] : null, async ([, id]) => {

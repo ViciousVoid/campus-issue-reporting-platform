@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import useSWR, { mutate } from 'swr'
-import { Building2, ImagePlus, LoaderCircle, LockKeyhole, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
+import { Building2, ImagePlus, LoaderCircle, Maximize2, MessageCircle, Minimize2, Send, Users, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { relativeTime } from '@/components/campus/issue-card'
 import { PhotoLightbox } from '@/components/campus/photo-lightbox'
@@ -46,7 +46,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl) }, [imagePreviewUrl])
-  const messagesKey = useMemo(() => userId && campusId ? ['campus-chat', campusId] as const : null, [campusId, userId])
+  const messagesKey = useMemo(() => campusId ? ['campus-chat', campusId] as const : null, [campusId])
   const { data: messages = [], error, isLoading } = useSWR(messagesKey, async ([, id]) => {
     const { data, error: fetchError } = await supabase
       .from('campus_chat_messages')
@@ -174,15 +174,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
       <div className="campus-chat-community"><Users size={14} /><span>Chat with people from your campus</span></div>
 
-      {!userId ? (
-        <div className="campus-chat-gate">
-          <span><LockKeyhole size={19} /></span>
-          <strong>Your campus, together</strong>
-          <p>Sign in with your campus account to join the conversation.</p>
-          <button className="button-primary small" type="button" onClick={onRequireAuth}>Sign in to chat</button>
-        </div>
-      ) : (
-        <>
+      <>
           <MessageScrollerProvider>
             <MessageScroller className="campus-chat-scroller">
               <MessageScrollerViewport className="campus-chat-messages">
@@ -221,7 +213,12 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
             </MessageScroller>
           </MessageScrollerProvider>
 
-          <form className="campus-chat-composer" onSubmit={(event) => void sendMessage(event)}>
+          {!userId ? (
+            <div className="campus-chat-composer">
+              <p>Everyone can read campus chat. Sign in to send a message.</p>
+              <button className="button-primary small" type="button" onClick={onRequireAuth}>Sign in to participate</button>
+            </div>
+          ) : <form className="campus-chat-composer" onSubmit={(event) => void sendMessage(event)}>
             {sendError && <p className="campus-chat-error" role="alert">{sendError}</p>}
             {imagePreviewUrl && <div className="campus-chat-image-preview"><img src={imagePreviewUrl} alt="Selected image preview" /><button type="button" aria-label="Remove attached image" onClick={removeSelectedImage}><X size={14} /></button></div>}
             <label className="sr-only" htmlFor="campus-chat-message">Write a campus message</label>
@@ -247,9 +244,8 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
                 </button>
               </div>
             </div>
-          </form>
-        </>
-      )}
+          </form>}
+      </>
       {viewImageUrl && <PhotoLightbox photos={[{ src: viewImageUrl, alt: 'Image attached to a campus message' }]} onClose={() => setViewImageUrl(null)} />}
       </section>
   )
