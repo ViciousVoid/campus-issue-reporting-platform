@@ -15,7 +15,8 @@ type ChatAuthor = { id: string; display_name: string; avatar_url: string | null 
 type CampusChatMessage = {
   id: string
   campus_id: string
-  user_id: string
+  user_id: string | null
+  guest_name?: string | null
   body: string
   image_path: string | null
   image_url: string | null
@@ -39,6 +40,15 @@ const IMAGE_EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/p
 
 export function CampusChat({ campusId, campusName, userId, expanded, onToggleExpanded, onRequireAuth }: CampusChatProps) {
   const [body, setBody] = useState('')
+  const [guestName, setGuestName] = useState('Campus Visitor')
+  useEffect(() => {
+    let name = window.sessionStorage.getItem('campusheat-guest-name')
+    if (!name) {
+      name = `Campus Visitor ${Math.floor(1000 + Math.random() * 9000)}`
+      window.sessionStorage.setItem('campusheat-guest-name', name)
+    }
+    setGuestName(name)
+  }, [])
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -46,18 +56,18 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl) }, [imagePreviewUrl])
-  const messagesKey = useMemo(() => userId && campusId ? ['campus-chat', campusId] as const : null, [campusId, userId])
+  const messagesKey = useMemo(() => campusId ? ['campus-chat', campusId] as const : null, [campusId])
   const { data: messages = [], error, isLoading } = useSWR(messagesKey, async ([, id]) => {
     const { data, error: fetchError } = await supabase
       .from('campus_chat_messages')
-      .select('id,campus_id,user_id,body,image_path,created_at')
+      .select('id,campus_id,user_id,guest_name,body,image_path,created_at')
       .eq('campus_id', id)
       .order('created_at', { ascending: false })
       .limit(100)
     if (fetchError) throw fetchError
 
     const rows = (data ?? []) as Omit<CampusChatMessage, 'author' | 'image_url'>[]
-    const userIds = Array.from(new Set(rows.map((message) => message.user_id)))
+    const userIds = Array.from(new Set(rows.map((message) => message.user_id).filter((id): id is string => Boolean(id))))
     const { data: profiles } = userIds.length
       ? await supabase.from('profiles').select('id,display_name,avatar_url').in('id', userIds)
       : { data: [] }
@@ -72,7 +82,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
       return {
         ...message,
         image_url: imageUrl,
-        author: authors.get(message.user_id) ?? null,
+        author: message.user_id ? authors.get(message.user_id) ?? null : (message.guest_name ? { display_name: message.guest_name, avatar_url: null } : null),
       }
     }))
   }, { refreshInterval: 50 * 60 * 1000 })
@@ -83,10 +93,6 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!userId) {
-      onRequireAuth()
-      return
-    }
     const text = body.trim()
     if ((!text && !selectedImage) || sending) return
 
@@ -95,13 +101,14 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
     let uploadedPath: string | null = null
 
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (userId && !user) {
         onRequireAuth()
         return
       }
+      if (!user && selectedImage) throw new Error('Guest messages are text-only. Sign in to attach an image.')
 
-      if (selectedImage) {
+      if (selectedImage && user) {
         const imagePath = `${campusId}/${user.id}/${crypto.randomUUID()}.${IMAGE_EXTENSIONS[selectedImage.type]}`
         const { error: uploadError } = await supabase.storage.from('campus-chat-images').upload(imagePath, selectedImage, {
           contentType: selectedImage.type,
@@ -113,7 +120,8 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
       const { error: insertError } = await supabase.from('campus_chat_messages').insert({
         campus_id: campusId,
-        user_id: user.id,
+        user_id: user?.id ?? null,
+        guest_name: user ? null : guestName,
         body: text,
         image_path: uploadedPath,
       })
@@ -123,9 +131,9 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
       setSelectedImage(null)
       setImagePreviewUrl(null)
       void refreshMessages().catch(() => undefined)
-    } catch {
+    } catch (error) {
       if (uploadedPath) await supabase.storage.from('campus-chat-images').remove([uploadedPath])
-      setSendError('Your message could not be sent. Check your campus account and try again.')
+      setSendError(error instanceof Error ? error.message : 'Your message could not be sent. Please try again.')
     } finally {
       setSending(false)
     }
@@ -174,15 +182,8 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
       <div className="campus-chat-community"><Users size={14} /><span>Chat with people from your campus</span></div>
 
-      {!userId ? (
-        <div className="campus-chat-gate">
-          <span><LockKeyhole size={19} /></span>
-          <strong>Your campus, together</strong>
-          <p>Sign in with your campus account to join the conversation.</p>
-          <button className="button-primary small" type="button" onClick={onRequireAuth}>Sign in to chat</button>
-        </div>
-      ) : (
-        <>
+      {!userId && <p className="campus-chat-community"><Users size={14} /><span>Posting as <strong>{guestName}</strong> · guests can send text messages</span></p>}
+      <>
           <MessageScrollerProvider>
             <MessageScroller className="campus-chat-scroller">
               <MessageScrollerViewport className="campus-chat-messages">
@@ -232,7 +233,6 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
               value={body}
               onChange={(event) => setBody(event.target.value)}
               onKeyDown={submitOnEnter}
-              onFocus={() => { if (!userId) onRequireAuth() }}
               placeholder="Message your campus…"
             />
             <div className="campus-chat-composer-footer">
@@ -248,8 +248,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
               </div>
             </div>
           </form>
-        </>
-      )}
+      </>
       {viewImageUrl && <PhotoLightbox photos={[{ src: viewImageUrl, alt: 'Image attached to a campus message' }]} onClose={() => setViewImageUrl(null)} />}
       </section>
   )
