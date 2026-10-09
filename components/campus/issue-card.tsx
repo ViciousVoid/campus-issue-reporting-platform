@@ -20,11 +20,9 @@ export const statusStyles: Record<string, string> = {
   in_progress: 'status-progress', resolved: 'status-resolved', reopened: 'status-reopened',
 }
 
-const supabase = createClient()
-
 function useIssuePhotoUrl(path: string | undefined) {
   const { data } = useSWR(path ? ['private-issue-photo', path] : null, async ([, filePath]) => {
-    const { data, error } = await supabase.storage.from('issue-photos').createSignedUrl(filePath, 60 * 60)
+    const { data, error } = await createClient().storage.from('issue-photos').createSignedUrl(filePath, 60 * 60)
     if (error) throw error
     return data.signedUrl
   })

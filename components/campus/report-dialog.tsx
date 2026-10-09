@@ -156,7 +156,7 @@ export function ReportDialog({ campusId, categories, locations, departments, onC
     setSubmitting(true)
     const { data: authData } = await supabase.auth.getUser()
     const userId = authData.user?.id
-    if (!userId) { setSubmitting(false); onRequireAuth(); return }
+    if (!userId) { setSubmitting(false); setError('Your guest session is still starting. Please try again.'); return }
     const response = await fetch('/api/issue-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

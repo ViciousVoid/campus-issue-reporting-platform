@@ -40,13 +40,16 @@ async function moderate(title: string, description: string) {
 export async function POST(request: Request) {
   const auth = await createClient()
   const { data: authData, error: authError } = await auth.auth.getUser()
-  if (authError || !authData.user) return Response.json({ error: 'Sign in before submitting an issue.' }, { status: 401 })
+  if (authError || !authData.user) return Response.json({ error: 'Your guest session could not be started. Please refresh and try again.' }, { status: 401 })
 
   const parsed = reportSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'Check the required report fields and try again.' }, { status: 400 })
   const input = parsed.data
-  const { data: profile, error: profileError } = await auth.from('profiles').select('campus_id').eq('id', authData.user.id).maybeSingle()
-  if (profileError || profile?.campus_id !== input.campusId) return Response.json({ error: 'Reports can only be submitted to your own campus.' }, { status: 403 })
+  const isAnonymous = Boolean(authData.user.is_anonymous)
+  const { data: profile, error: profileError } = isAnonymous
+    ? { data: null, error: null }
+    : await auth.from('profiles').select('campus_id').eq('id', authData.user.id).maybeSingle()
+  if ((!isAnonymous && (profileError || profile?.campus_id !== input.campusId))) return Response.json({ error: 'Reports can only be submitted to your own campus.' }, { status: 403 })
   const admin = createAdminClient()
   const [{ data: campus }, { data: category }, locationResult, departmentResult] = await Promise.all([
     admin.from('campuses').select('id').eq('id', input.campusId).maybeSingle(),

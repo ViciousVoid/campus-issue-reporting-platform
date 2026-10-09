@@ -9,7 +9,7 @@ import {
   Moon, Plus, Search, Send, ShieldCheck, Sun, ThumbsUp, Users, Wrench, X,
   type LucideIcon,
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, ensureAnonymousUser } from '@/lib/supabase/client'
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
 import {
   STATUS_LABELS, isHiddenCampus, type AppView, type Campus, type CampusIssue,
@@ -74,11 +74,17 @@ function CampusMenu({ campuses, selectedCampusId, searchInput, searchQuery, clas
   )
 }
 
-async function loadCampuses(): Promise<CampusDetails[]> {
+  const fallbackCampuses: CampusDetails[] = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'SGSITS Indore', city: 'Indore', region: 'Madhya Pradesh', slug: 'sgsits-indore', is_public: true, signup_enabled: true, logo_label: 'SG', brand_color: '#ed6747', brand_dark_color: '#d95739', banner_url: null },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'DAVV', city: 'Indore', region: 'Madhya Pradesh', slug: 'davv', is_public: true, signup_enabled: true, logo_label: 'DA', brand_color: '#2f80ed', brand_dark_color: '#1c64c7', banner_url: null },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Acropolis Institute Of Research and Technology', city: 'Indore', region: 'Madhya Pradesh', slug: 'acropolis-institute-of-research-and-technology', is_public: true, signup_enabled: true, logo_label: 'AI', brand_color: '#8b5cf6', brand_dark_color: '#6d3fd1', banner_url: null },
+  ]
+
+  async function loadCampuses(): Promise<CampusDetails[]> {
   const { data, error } = await supabase.from('campuses').select('id,name,city,region,slug,is_public,signup_enabled,logo_label,brand_color,brand_dark_color,banner_url').order('name')
-  if (error) throw error
+  if (error || !data?.length) return fallbackCampuses
   return ((data ?? []) as CampusDetails[])
-    .filter((campus) => !isHiddenCampus(campus))
+  .filter((campus) => !isHiddenCampus(campus))
     .sort((a, b) => {
       const priority = (campus: CampusDetails) => campus.slug === 'sgsits-indore' || campus.name.toLowerCase().includes('sgsits') ? 0 : 1
       return priority(a) - priority(b) || a.name.localeCompare(b.name)
@@ -125,6 +131,8 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [view, setView] = useState<AppView>('home')
   const [campusId, setCampusId] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  const [anonymousName, setAnonymousName] = useState<string | null>(null)
+  const [isAnonymous, setIsAnonymous] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -151,7 +159,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   const [notice, setNotice] = useState('')
   const [isDarkMode, setIsDarkMode] = useState(true)
 
-  const canLoadCampusData = !userId || profile?.campus_id === campusId
+  const canLoadCampusData = isAnonymous || !userId || profile?.campus_id === campusId
   const { data: campuses = [], error: campusError } = useSWR('campuses', loadCampuses)
   const { data: categories = [] } = useSWR(campusId && canLoadCampusData ? ['categories', campusId] : null, ([, id]) => loadCategories(id))
   const { data: announcements = [] } = useSWR(campusId ? ['campus-announcements', campusId] : null, async ([, id]) => {
@@ -218,9 +226,12 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
     let active = true
     void supabase.auth.getUser().then(async ({ data }: { data: { user: User | null } }) => {
       if (!active) return
-      const user = data.user
+      const user = data.user ?? await ensureAnonymousUser().catch(() => null)
       setUserId(user?.id ?? null)
+      setIsAnonymous(Boolean(user?.is_anonymous))
+      setAnonymousName(typeof user?.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : null)
       if (!user) return
+      if (user.is_anonymous) return
       const { data: row } = await supabase.from('profiles').select('id,display_name,avatar_url,campus_id').eq('id', user.id).maybeSingle()
       if (!active) return
       if (row) {
@@ -542,10 +553,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
   }
 
   function openReport() {
-    if (!userId) {
-      setReportAfterAuth(true)
-      setAuthOpen(true)
-    } else if (!campusId) setNotice('Choose a campus before reporting a problem.')
+    if (!campusId) setNotice('Choose a campus before reporting a problem.')
     else setReportOpen(true)
   }
 
@@ -612,7 +620,7 @@ export function CampusApp({ initialCampusSlug }: { initialCampusSlug?: string } 
           </section>
         ) : view === 'chat' ? (
           <section className="content-page mobile-chat-page">
-            <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} expanded={false} onToggleExpanded={() => setChatExpanded(false)} onRequireAuth={() => setAuthOpen(true)} />
+            <CampusChat campusId={campusId} campusName={campus?.name ?? 'Your college'} userId={userId} anonymousName={anonymousName ?? undefined} expanded={false} onToggleExpanded={() => setChatExpanded(false)} onRequireAuth={() => undefined} />
           </section>
         ) : view === 'activity' ? (
           <section className="content-page activity-page">

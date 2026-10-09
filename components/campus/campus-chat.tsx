@@ -30,6 +30,7 @@ type CampusChatProps = {
   expanded: boolean
   onToggleExpanded: () => void
   onRequireAuth: () => void
+  anonymousName?: string
 }
 
 const supabase = createClient()
@@ -37,7 +38,7 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const IMAGE_EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 
-export function CampusChat({ campusId, campusName, userId, expanded, onToggleExpanded, onRequireAuth }: CampusChatProps) {
+export function CampusChat({ campusId, campusName, userId, expanded, onToggleExpanded, onRequireAuth, anonymousName }: CampusChatProps) {
   const [body, setBody] = useState('')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
@@ -83,10 +84,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!userId) {
-      onRequireAuth()
-      return
-    }
+    if (!userId) return
     const text = body.trim()
     if ((!text && !selectedImage) || sending) return
 
@@ -96,10 +94,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) {
-        onRequireAuth()
-        return
-      }
+      if (userError || !user) return
 
       if (selectedImage) {
         const imagePath = `${campusId}/${user.id}/${crypto.randomUUID()}.${IMAGE_EXTENSIONS[selectedImage.type]}`
@@ -174,14 +169,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
 
       <div className="campus-chat-community"><Users size={14} /><span>Chat with people from your campus</span></div>
 
-      {!userId ? (
-        <div className="campus-chat-gate">
-          <span><LockKeyhole size={19} /></span>
-          <strong>Your campus, together</strong>
-          <p>Sign in with your campus account to join the conversation.</p>
-          <button className="button-primary small" type="button" onClick={onRequireAuth}>Sign in to chat</button>
-        </div>
-      ) : (
+      {userId ? (
         <>
           <MessageScrollerProvider>
             <MessageScroller className="campus-chat-scroller">
@@ -192,7 +180,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
                       : messages.length === 0 ? <div className="campus-chat-empty"><span><MessageCircle size={19} /></span><strong>Start the conversation</strong><p>Share a helpful update, ask a question, or say hello.</p></div>
                         : messages.map((message, index) => {
                           const isOwnMessage = message.user_id === userId
-                          const displayName = message.author?.display_name || 'Campus student'
+                          const displayName = message.author?.display_name || (message.user_id === userId ? anonymousName : null) || 'Campus guest'
                           return (
                             <MessageScrollerItem key={message.id} scrollAnchor={index === messages.length - 1}>
                               <MessageGroup className={`campus-chat-message${isOwnMessage ? ' own-message' : ''}`}>
@@ -232,7 +220,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
               value={body}
               onChange={(event) => setBody(event.target.value)}
               onKeyDown={submitOnEnter}
-              onFocus={() => { if (!userId) onRequireAuth() }}
+              onFocus={() => undefined}
               placeholder="Message your campus…"
             />
             <div className="campus-chat-composer-footer">
@@ -249,7 +237,7 @@ export function CampusChat({ campusId, campusName, userId, expanded, onToggleExp
             </div>
           </form>
         </>
-      )}
+      ) : null}
       {viewImageUrl && <PhotoLightbox photos={[{ src: viewImageUrl, alt: 'Image attached to a campus message' }]} onClose={() => setViewImageUrl(null)} />}
       </section>
   )
