@@ -19,19 +19,37 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [pending, setPending] = useState(false)
-  const { data: campuses = [] } = useSWR('signup-campuses', async () => {
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+  const { data: campuses = [], error: campusesError, isLoading: campusesLoading } = useSWR('signup-campuses', async () => {
     const { data, error } = await supabase.from('campuses').select('id,name,slug,signup_enabled').order('name')
     if (error) throw error
     return ((data ?? []) as SignupCampus[]).filter((campus) => !isHiddenCampus(campus))
   })
+  const openCampuses = campuses.filter((campus) => campus.signup_enabled)
+  const selectedCampusSlug = openCampuses.some((campus) => campus.slug === campusSlug) ? campusSlug : openCampuses[0]?.slug ?? ''
+  const redirectTo = () => process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? `${window.location.origin}/auth/callback`
+
+  function describeEmailError(code: string | undefined, message: string) {
+    if (code === 'over_email_send_rate_limit' || message.includes('rate')) return 'Email limit reached. Please wait a few minutes and try again.'
+    if (code === 'email_address_not_authorized') return 'Confirmation emails can only be sent to approved addresses right now. A custom email (SMTP) provider must be set up to reach this address.'
+    if (code === 'email_address_invalid') return 'That email address is not accepted. Please use your real college or personal email.'
+    return null
+  }
+
+  async function resendConfirmation() {
+    setResendState('sending')
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: redirectTo() } })
+    setResendState(resendError ? 'failed' : 'sent')
+    if (resendError) setSuccess(describeEmailError(resendError.code, resendError.message.toLowerCase()) ?? 'Could not resend the email. Please try again shortly.')
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
     setSuccess('')
     if (password.length < 8) { setError('Use a password with at least 8 characters.'); return }
-    if (mode === 'signup' && !campuses.some((campus) => campus.slug === campusSlug && campus.signup_enabled)) {
-      setError('Choose a campus that is currently open for signup.')
+    if (mode === 'signup' && !selectedCampusSlug) {
+      setError(campusesError ? 'Could not load campuses. The database may not be set up yet.' : 'No campus is open for signup right now.')
       return
     }
     setPending(true)
@@ -39,14 +57,16 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
       const { data, error: authError } = await supabase.auth.signUp({
         email: email.trim(), password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ?? `${window.location.origin}/auth/callback`,
-          data: { display_name: displayName.trim() || email.split('@')[0], campus_slug: campusSlug },
+          emailRedirectTo: redirectTo(),
+          data: { display_name: displayName.trim() || email.split('@')[0], campus_slug: selectedCampusSlug },
         },
       })
       setPending(false)
       if (authError) {
         const message = authError.message.toLowerCase()
-        setError(message.includes('password') ? 'Please choose a stronger password.' : message.includes('rate') ? 'Too many attempts. Please try again shortly.' : 'Could not create your account. Check your details and try again.')
+        setError(describeEmailError(authError.code, message) ?? (message.includes('password') ? 'Please choose a stronger password.' : 'Could not create your account. Please try again.'))
+      } else if (data.user && (data.user.identities?.length ?? 0) === 0) {
+        setError('An account with this email may already exist. Try signing in instead.')
       } else if (data.session && data.user) {
         onAuthenticated(data.user.id, displayName.trim())
       } else {
@@ -58,7 +78,12 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
     setPending(false)
     if (authError) {
       const message = authError.message.toLowerCase()
-      setError(message.includes('email not confirmed') ? 'Please confirm your email from the link we sent before signing in.' : message.includes('rate') ? 'Too many attempts. Please try again shortly.' : 'Invalid email or password. Please try again.')
+      if (authError.code === 'email_not_confirmed' || message.includes('email not confirmed')) {
+        setResendState('idle')
+        setSuccess('Your email is not confirmed yet. Open the link we sent, or resend it below.')
+        return
+      }
+      setError(message.includes('rate') ? 'Too many attempts. Please try again shortly.' : 'Invalid email or password. Please try again.')
       return
     }
     if (data.user) onAuthenticated(data.user.id, data.user.user_metadata?.display_name)
@@ -73,10 +98,11 @@ export function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
         <h2 id="auth-title">{mode === 'signin' ? 'Sign in' : 'Create account'}</h2>
         <p className="auth-subtitle">{mode === 'signin' ? 'Sign in to vote and follow campus reports.' : 'Choose your campus to create a student account.'}</p>
         {success ? <div className="auth-success"><CheckCircle2 size={21} /><strong>Check your email</strong><p>{success}</p>
-<button className="button-secondary" onClick={() => { setSuccess(''); setMode('signin') }}><ArrowLeft size={14} /> Back to sign in</button></div> : <form className="auth-form" onSubmit={submit}>
+<button className="button-secondary" disabled={resendState === 'sending' || !email.trim()} onClick={resendConfirmation}>{resendState === 'sending' ? <LoaderCircle size={14} className="spin" /> : <Mail size={14} />}{resendState === 'sent' ? 'Email sent again' : 'Resend email'}</button>
+<button className="button-secondary" onClick={() => { setSuccess(''); setResendState('idle'); setMode('signin') }}><ArrowLeft size={14} /> Back to sign in</button></div> : <form className="auth-form" onSubmit={submit}>
           {mode === 'signup' && <>
             <label className="form-field"><span>Your name</span><input autoComplete="name" maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="How should we address you?" /></label>
-            <label className="form-field"><span>College campus</span><select required value={campusSlug} onChange={(event) => setCampusSlug(event.target.value)}>{campuses.filter((campus) => campus.signup_enabled).map((campus) => <option key={campus.id} value={campus.slug}>{campus.name}</option>)}</select><small className="auth-campus-note">Choose the campus where you&apos;re enrolled.</small></label>
+            <label className="form-field"><span>College campus</span><select required value={selectedCampusSlug} disabled={!openCampuses.length} onChange={(event) => setCampusSlug(event.target.value)}>{openCampuses.length ? openCampuses.map((campus) => <option key={campus.id} value={campus.slug}>{campus.name}</option>) : <option value="">{campusesLoading ? 'Loading campuses…' : 'No campuses available'}</option>}</select><small className="auth-campus-note">{campusesError ? 'Could not load campuses right now.' : 'Choose the campus where you\u2019re enrolled.'}</small></label>
           </>}
           <label className="form-field"><span>Email address</span><span className="input-with-icon"><Mail size={16} /><input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.edu" /></span></label>
           <label className="form-field"><span>Password</span><span className="input-with-icon"><LockKeyhole size={16} /><input autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required minLength={8} type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" /></span></label>
